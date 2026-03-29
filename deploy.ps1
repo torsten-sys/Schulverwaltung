@@ -41,4 +41,22 @@ foreach ($dll in $dlls) {
 Write-Host "App wieder online..." -ForegroundColor Yellow
 Remove-Item $offline -Force
 
+# 5. Git commit + push
+Write-Host "Git commit & push..." -ForegroundColor Yellow
+Set-Location "C:\Schulverwaltung"
+$geaendert = git status --porcelain
+if ($geaendert) {
+    $zeitstempel = Get-Date -Format "yyyy-MM-dd HH:mm"
+    git add .
+    git commit -m "Deploy $zeitstempel"
+    git push
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  OK: Aenderungen gepusht" -ForegroundColor Green
+    } else {
+        Write-Host "  WARNUNG: Git push fehlgeschlagen (Deploy war trotzdem erfolgreich)" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "  Keine Aenderungen zum Committen" -ForegroundColor Gray
+}
+
 Write-Host "=== Deploy abgeschlossen ===" -ForegroundColor Cyan
