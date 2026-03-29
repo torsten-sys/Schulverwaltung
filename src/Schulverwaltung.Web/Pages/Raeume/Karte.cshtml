@@ -1,0 +1,218 @@
+@page "{id:int?}"
+@model Schulverwaltung.Web.Pages.Raeume.KarteModel
+@using Schulverwaltung.Infrastructure.Services
+@{ ViewData["Title"] = Model.Titel; }
+
+@functions {
+    static string ZustandStyle(byte z) => z switch {
+        0 => "background:#dff6dd;color:#107C10",
+        1 => "background:#fff4ce;color:#8a6914",
+        2 => "background:#fde7e9;color:#c50f1f",
+        3 => "background:#f3f2f1;color:#605e5c",
+        _ => "background:#f3f2f1;color:#605e5c"
+    };
+}
+
+<div class="bc-page" style="max-width:none">
+
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Raeume" class="bc-back-btn" title="Zurück zur Raumliste">&#x2190;</a>
+            <span class="bc-page-badge">RAUM | Arbeitsdatum: @DateTime.Today.ToString("dd.MM.yyyy")</span>
+        </div>
+        <div class="bc-card-topbar-right">
+            <button type="submit" form="form-speichern" class="bc-icon-btn" title="Speichern (✔)">&#x2714;</button>
+            @if (!Model.IstNeu)
+            {
+                <a href="/Raeume/Karte" class="bc-icon-btn" title="Neuer Raum (+)">+</a>
+                <form method="post" asp-page-handler="Loeschen"
+                      onsubmit="return confirm('Raum wirklich löschen?')" style="display:contents">
+                    <input type="hidden" asp-for="Form.RaumId" />
+                    <button type="submit" class="bc-icon-btn bc-icon-btn-danger" title="Löschen">&#x1F5D1;</button>
+                </form>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert bc-alert-danger">@Model.Fehler</div>
+    }
+
+    <h1 class="bc-card-title">
+        @if (Model.IstNeu)
+        {
+            <span>Neuer Raum</span>
+        }
+        else
+        {
+            <span class="bc-title-nr">@Model.Form.RaumNr</span>
+            <span class="bc-title-sep"> · </span>
+            <span>@Model.Form.Bezeichnung</span>
+            @if (Model.Form.Gesperrt)
+            {
+                <span class="bc-title-status" style="background:#fde7e9;color:#c50f1f">Gesperrt</span>
+            }
+        }
+    </h1>
+
+    <nav class="bc-action-tabs">
+        <a href="#" class="bc-action-tab active" data-panel="panel-allgemein">Allgemein</a>
+        @if (!Model.IstNeu)
+        {
+            <a href="#" class="bc-action-tab" data-panel="panel-inventar">Inventar (@Model.Inventar.Count)</a>
+        }
+    </nav>
+
+    <div style="display:flex;gap:16px;align-items:flex-start">
+        <div style="flex:3;min-width:0">
+
+            <div id="panel-allgemein" class="bc-tab-panel active">
+                <form id="form-speichern" method="post" asp-page-handler="Speichern">
+                    <input type="hidden" asp-for="Form.RaumId" />
+                    <p class="bc-section-title">Stammdaten</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field">
+                            <span class="bc-field-label">Raum-Nr.</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input class="bc-field-ctrl" value="@(Model.IstNeu ? "(wird automatisch vergeben)" : Model.Form.RaumNr)" readonly style="color:#605e5c" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Bezeichnung</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Bezeichnung" class="bc-field-ctrl" maxlength="100" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Raumtyp</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <select asp-for="Form.RaumTypId" class="bc-field-ctrl">
+                                    <option value="0">– bitte wählen –</option>
+                                    @foreach (var t in Model.RaumTypen)
+                                    {
+                                        <option value="@t.RaumTypId">@t.Bezeichnung</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Kapazität</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-sm">
+                                <input asp-for="Form.Kapazitaet" type="number" min="0" class="bc-field-ctrl" placeholder="–" />
+                            </div>
+                        </div>
+                        <div class="bc-field-check">
+                            <input asp-for="Form.Gesperrt" type="checkbox" id="chk-gesperrt" />
+                            <label for="chk-gesperrt" style="font-size:13px">Gesperrt</label>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Sperrgrund</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.SperrGrund" class="bc-field-ctrl" maxlength="200" />
+                            </div>
+                        </div>
+                        <div class="bc-field-block bc-field-full">
+                            <label class="bc-field-label">Notiz</label>
+                            <textarea asp-for="Form.Notiz" class="bc-field-ctrl" rows="3" style="width:100%;resize:vertical"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            @if (!Model.IstNeu)
+            {
+                <div id="panel-inventar" class="bc-tab-panel">
+                    <table class="bc-table" style="width:100%;font-size:12px">
+                        <thead>
+                            <tr>
+                                <th class="col-nr">Nr.</th>
+                                <th>Bezeichnung</th>
+                                <th style="width:130px">Kategorie</th>
+                                <th style="width:110px">Zustand</th>
+                                <th>Person</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var i in Model.Inventar)
+                        {
+                            <tr class="bc-row-link" onclick="window.location='/Inventar/Karte/@i.InventarId'">
+                                <td class="col-nr">@i.InventarNr</td>
+                                <td>@i.Bezeichnung</td>
+                                <td style="color:#605e5c">@i.Kategorie</td>
+                                <td><span class="bc-badge" style="@ZustandStyle(i.Zustand)">@i.ZustandText</span></td>
+                                <td style="color:#605e5c">@(i.PersonName ?? "–")</td>
+                            </tr>
+                        }
+                        @if (!Model.Inventar.Any())
+                        {
+                            <tr><td colspan="5" style="text-align:center;color:#a19f9d;padding:16px">Kein Inventar in diesem Raum.</td></tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+        </div>
+
+        @if (!Model.IstNeu)
+        {
+            <div style="flex:1;min-width:200px">
+                <div class="bc-side-container">
+                    <div style="padding:12px">
+                        <p class="bc-section-title">Info</p>
+                        <div style="margin-bottom:8px">
+                            <span style="font-size:11px;color:#605e5c">Raumtyp</span><br />
+                            <strong>@(Model.AktuellerTyp?.Bezeichnung ?? "–")</strong>
+                            @if (Model.AktuellerTyp?.IstInternat == true)
+                            {
+                                <span class="bc-badge" style="background:#e0f3f3;color:#006360;margin-left:4px;font-size:10px">Internat</span>
+                            }
+                        </div>
+                        @if (Model.Form.Kapazitaet.HasValue)
+                        {
+                            <div style="margin-bottom:8px">
+                                <span style="font-size:11px;color:#605e5c">Kapazität</span><br />
+                                <strong style="font-size:20px">@Model.Form.Kapazitaet</strong>
+                            </div>
+                        }
+                        <div style="margin-bottom:8px">
+                            <span style="font-size:11px;color:#605e5c">Inventargegenstände</span><br />
+                            <strong style="font-size:20px">@Model.Inventar.Count</strong>
+                        </div>
+                        @if (Model.Form.Gesperrt && !string.IsNullOrEmpty(Model.Form.SperrGrund))
+                        {
+                            <div style="margin-top:12px;padding:8px;background:#fde7e9;border-radius:2px;font-size:12px;color:#c50f1f">
+                                <strong>Gesperrt:</strong> @Model.Form.SperrGrund
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function() {
+    var tabs   = document.querySelectorAll('.bc-action-tab');
+    var panels = document.querySelectorAll('.bc-tab-panel');
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            tabs.forEach(t => t.classList.remove('active'));
+            panels.forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            var p = document.getElementById(tab.dataset.panel);
+            if (p) p.classList.add('active');
+        });
+    });
+})();
+</script>
+}

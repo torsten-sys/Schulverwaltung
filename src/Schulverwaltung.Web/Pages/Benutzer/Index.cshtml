@@ -1,0 +1,193 @@
+@page
+@model Schulverwaltung.Web.Pages.Benutzer.BenutzerIndexModel
+@{ ViewData["Title"] = "Benutzerverwaltung"; }
+
+@functions {
+    static string RolleBadgeStyle(byte r) => r switch {
+        0 => "background:#f3f2f1;color:#605e5c",
+        1 => "background:#cef0f2;color:#00868f",
+        2 => "background:#e0f3f3;color:#00604A",
+        3 => "background:#1F3864;color:#fff;font-weight:700",
+        _ => "background:#f3f2f1;color:#605e5c"
+    };
+}
+
+<div class="bc-page">
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <span class="bc-page-badge">BENUTZERVERWALTUNG</span>
+        </div>
+    </div>
+
+    <h1 class="bc-card-title"><span>Benutzerverwaltung</span></h1>
+
+    @if (Model.OhneRolleAnzahl > 0)
+    {
+        <div class="bc-alert" style="background:#fff4ce;border-color:#f3d6a4;color:#8a6914;margin-bottom:12px">
+            &#9888; <strong>@Model.OhneRolleAnzahl Benutzer</strong> haben noch keine Rolle zugewiesen bekommen.
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+
+    @* Filter-Leiste *@
+    <form method="get" class="bc-filter-bar" style="margin-bottom:12px">
+        <input name="Suche" value="@Model.Suche" class="bc-field-ctrl" style="width:220px" placeholder="Name oder AD-Konto..." />
+        <select name="FilterRolle" class="bc-field-ctrl" style="width:160px">
+            <option value="">– Alle Rollen –</option>
+            @if (Model.FilterRolle == "0") { <option value="0" selected>Gast</option> } else { <option value="0">Gast</option> }
+            @if (Model.FilterRolle == "1") { <option value="1" selected>Sachbearbeiter</option> } else { <option value="1">Sachbearbeiter</option> }
+            @if (Model.FilterRolle == "2") { <option value="2" selected>Dozent</option> } else { <option value="2">Dozent</option> }
+            @if (Model.FilterRolle == "3") { <option value="3" selected>Administrator</option> } else { <option value="3">Administrator</option> }
+        </select>
+        <select name="FilterStatus" class="bc-field-ctrl" style="width:130px">
+            <option value="">– Alle –</option>
+            @if (Model.FilterStatus == "aktiv")    { <option value="aktiv"    selected>Aktiv</option> }    else { <option value="aktiv">Aktiv</option> }
+            @if (Model.FilterStatus == "gesperrt") { <option value="gesperrt" selected>Gesperrt</option> } else { <option value="gesperrt">Gesperrt</option> }
+        </select>
+        <button type="submit" class="bc-btn">Filtern</button>
+        @if (!string.IsNullOrEmpty(Model.Suche) || !string.IsNullOrEmpty(Model.FilterRolle) || !string.IsNullOrEmpty(Model.FilterStatus))
+        {
+            <a href="/Benutzer" class="bc-btn">&#10005; Reset</a>
+        }
+        <span style="margin-left:8px;font-size:12px;color:#605e5c">
+            <strong>@Model.Benutzer.Count</strong> Benutzer &nbsp;·&nbsp;
+            <strong style="color:@(Model.OhneRolleAnzahl > 0 ? "#c50f1f" : "#107C10")">@Model.OhneRolleAnzahl</strong> warten auf Rollenzuweisung
+        </span>
+    </form>
+
+    <table class="bc-table" style="width:100%;font-size:12px">
+        <thead>
+            <tr>
+                <th>AD-Name</th>
+                <th>Anzeigename</th>
+                <th>E-Mail</th>
+                <th style="width:120px">Rolle</th>
+                <th style="width:200px">Person</th>
+                <th style="width:110px">Letzter Login</th>
+                <th style="width:90px">Status</th>
+                <th style="width:180px">Aktionen</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var b in Model.Benutzer)
+            {
+                <tr>
+                    <td>
+                        <a href="/Benutzer/Karte?id=@b.BenutzerId" style="color:#00B7C3;text-decoration:none">
+                            @b.AdBenutzername
+                        </a>
+                    </td>
+                    <td>@(b.DisplayName ?? "–")</td>
+                    <td style="color:#605e5c">@(b.Email ?? "–")</td>
+                    <td>
+                        <form method="post" asp-page-handler="Rolle" style="display:flex;gap:4px;align-items:center">
+                            <input type="hidden" name="benutzerId" value="@b.BenutzerId" />
+                            <select name="neueRolle" class="bc-field-ctrl" style="height:22px;font-size:11px;width:130px">
+                                @if (b.AppRolle == 0) { <option value="0" selected>Gast</option> }           else { <option value="0">Gast</option> }
+                                @if (b.AppRolle == 1) { <option value="1" selected>Sachbearbeiter</option> } else { <option value="1">Sachbearbeiter</option> }
+                                @if (b.AppRolle == 2) { <option value="2" selected>Dozent</option> }         else { <option value="2">Dozent</option> }
+                                @if (b.AppRolle == 3) { <option value="3" selected>Administrator</option> }  else { <option value="3">Administrator</option> }
+                            </select>
+                            <button type="submit" class="bc-btn bc-btn-sm bc-btn-primary" title="Rolle übernehmen">✔</button>
+                        </form>
+                    </td>
+                    <td>
+                        <form method="post" asp-page-handler="Person" style="display:flex;gap:4px;align-items:center">
+                            <input type="hidden" name="benutzerId" value="@b.BenutzerId" />
+                            <select name="personId" class="bc-field-ctrl" style="height:22px;font-size:11px;width:170px">
+                                <option value="0">– keine –</option>
+                                @foreach (var p in b.PersonenListe)
+                                {
+                                    @if (b.PersonId == p.PersonId)
+                                    {
+                                        <option value="@p.PersonId" selected>@p.Name</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@p.PersonId">@p.Name</option>
+                                    }
+                                }
+                            </select>
+                            <button type="submit" class="bc-btn bc-btn-sm" title="Person verknüpfen">✔</button>
+                        </form>
+                    </td>
+                    <td style="color:#605e5c">
+                        @(b.LetzterLogin?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "–")
+                    </td>
+                    <td>
+                        @if (b.Gesperrt)
+                        {
+                            <span style="color:#c50f1f;font-size:11px;font-weight:600" title="@b.SperrGrund">&#9888; Gesperrt</span>
+                        }
+                        else
+                        {
+                            <span style="color:#107C10;font-size:11px">&#9679; Aktiv</span>
+                        }
+                    </td>
+                    <td style="white-space:nowrap">
+                        @if (b.Gesperrt)
+                        {
+                            <form method="post" asp-page-handler="Entsperren" style="display:inline">
+                                <input type="hidden" name="benutzerId" value="@b.BenutzerId" />
+                                <button type="submit" class="bc-btn bc-btn-sm" style="color:#107C10">Entsperren</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <button type="button" class="bc-btn bc-btn-sm"
+                                    onclick="openSperrModal(@b.BenutzerId,'@b.AdBenutzername.Replace("'","\\'")')">
+                                Sperren
+                            </button>
+                        }
+                        <a href="/Benutzer/Karte?id=@b.BenutzerId" class="bc-btn bc-btn-sm">Detail</a>
+                    </td>
+                </tr>
+            }
+            @if (!Model.Benutzer.Any())
+            {
+                <tr><td colspan="8" style="text-align:center;color:#a19f9d;padding:16px">
+                    Keine Benutzer vorhanden.
+                </td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@* Modal: Sperren *@
+<div id="modal-sperren" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:#fff;padding:24px;min-width:380px;border:1px solid #ccc">
+        <h6 id="sperr-titel" style="margin:0 0 12px;font-size:13px;font-weight:600">Benutzer sperren</h6>
+        <form method="post" asp-page-handler="Sperren">
+            <input type="hidden" name="benutzerId" id="sperr-bid" value="0" />
+            <div class="bc-field bc-field-full" style="margin-bottom:12px">
+                <span class="bc-field-label">Sperrgrund</span>
+                <span class="bc-field-dots"></span>
+                <div class="bc-field-right bc-field-right-lg">
+                    <input name="sperrGrund" id="sperr-grund" class="bc-field-ctrl" placeholder="Grund eingeben..." />
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end">
+                <button type="button" class="bc-btn" onclick="document.getElementById('modal-sperren').style.display='none'">Abbrechen</button>
+                <button type="submit" class="bc-btn" style="background:#c50f1f;color:#fff;border-color:#c50f1f">Sperren</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+function openSperrModal(id, name) {
+    document.getElementById('sperr-bid').value   = id;
+    document.getElementById('sperr-grund').value = '';
+    document.getElementById('sperr-titel').textContent = 'Benutzer sperren: ' + name;
+    document.getElementById('modal-sperren').style.display = 'flex';
+}
+document.getElementById('modal-sperren').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+});
+</script>
+}

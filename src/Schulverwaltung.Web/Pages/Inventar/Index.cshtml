@@ -1,0 +1,237 @@
+@page
+@model Schulverwaltung.Web.Pages.Inventar.IndexModel
+@{ ViewData["Title"] = "Inventar"; }
+
+@functions {
+    static string ZustandStyle(byte z) => z switch {
+        0 => "background:#dff6dd;color:#107C10",
+        1 => "background:#fff4ce;color:#8a6914",
+        2 => "background:#fde7e9;color:#c50f1f",
+        3 => "background:#f3f2f1;color:#605e5c",
+        _ => "background:#f3f2f1;color:#605e5c"
+    };
+}
+
+<div class="bc-page">
+    <h1 class="bc-page-title">Inventar</h1>
+
+    <div class="bc-action-bar">
+        @if (Model.DarfBearbeiten)
+        {
+            <a class="bc-btn bc-btn-primary" href="/Inventar/Karte">+ Neuer Gegenstand</a>
+            <span class="bc-sep"></span>
+        }
+        <form method="get" style="display:contents">
+            <select name="FilterKategorie" class="bc-field-ctrl" style="width:auto;height:28px" onchange="this.form.submit()">
+                @if (!Model.FilterKategorie.HasValue) { <option value="" selected>Alle Kategorien</option> } else { <option value="">Alle Kategorien</option> }
+                @foreach (var k in Model.Kategorien)
+                {
+                    if (Model.FilterKategorie == k.KategorieId) { <option value="@k.KategorieId" selected>@k.Bezeichnung</option> }
+                    else { <option value="@k.KategorieId">@k.Bezeichnung</option> }
+                }
+            </select>
+            <select name="FilterOrgEinheit" class="bc-field-ctrl" style="width:auto;height:28px" onchange="this.form.submit()">
+                @if (!Model.FilterOrgEinheit.HasValue) { <option value="" selected>Alle Org.Einheiten</option> } else { <option value="">Alle Org.Einheiten</option> }
+                @foreach (var o in Model.OrgEinheiten)
+                {
+                    if (Model.FilterOrgEinheit == o.OrgEinheitId) { <option value="@o.OrgEinheitId" selected>@o.Code · @o.Bezeichnung</option> }
+                    else { <option value="@o.OrgEinheitId">@o.Code · @o.Bezeichnung</option> }
+                }
+            </select>
+            <select name="FilterRaum" class="bc-field-ctrl" style="width:auto;height:28px" onchange="this.form.submit()">
+                @if (!Model.FilterRaum.HasValue) { <option value="" selected>Alle Räume</option> } else { <option value="">Alle Räume</option> }
+                @foreach (var r in Model.Raeume)
+                {
+                    if (Model.FilterRaum == r.RaumId) { <option value="@r.RaumId" selected>@r.RaumNr · @r.Bezeichnung</option> }
+                    else { <option value="@r.RaumId">@r.RaumNr · @r.Bezeichnung</option> }
+                }
+            </select>
+            <select name="FilterZustand" class="bc-field-ctrl" style="width:auto;height:28px" onchange="this.form.submit()">
+                @if (string.IsNullOrEmpty(Model.FilterZustand)) { <option value="" selected>Alle Zustände</option> } else { <option value="">Alle Zustände</option> }
+                @if (Model.FilterZustand == "0") { <option value="0" selected>Gut</option> } else { <option value="0">Gut</option> }
+                @if (Model.FilterZustand == "1") { <option value="1" selected>Beschädigt</option> } else { <option value="1">Beschädigt</option> }
+                @if (Model.FilterZustand == "2") { <option value="2" selected>Defekt</option> } else { <option value="2">Defekt</option> }
+                @if (Model.FilterZustand == "3") { <option value="3" selected>Ausgemustert</option> } else { <option value="3">Ausgemustert</option> }
+            </select>
+            <select name="FilterGesperrt" class="bc-field-ctrl" style="width:auto;height:28px" onchange="this.form.submit()">
+                @if (string.IsNullOrEmpty(Model.FilterGesperrt)) { <option value="" selected>Nur aktive</option> } else { <option value="">Nur aktive</option> }
+                @if (Model.FilterGesperrt == "gesperrt") { <option value="gesperrt" selected>Nur gesperrte</option> } else { <option value="gesperrt">Nur gesperrte</option> }
+                @if (Model.FilterGesperrt == "alle") { <option value="alle" selected>Alle (inkl. gesperrt)</option> } else { <option value="alle">Alle (inkl. gesperrt)</option> }
+            </select>
+        </form>
+        <input type="search" id="bc-search" class="bc-search" placeholder="Suchen..." value="@Model.Suche" autocomplete="off" />
+        <span class="bc-entry-count" id="entry-count"></span>
+    </div>
+
+    <div class="bc-list-layout">
+        <div class="bc-list-main">
+            <div class="bc-table-wrap">
+                <table class="bc-table" id="bc-table">
+                    <thead>
+                        <tr>
+                            <th class="col-nr">Nr.</th>
+                            <th>Bezeichnung</th>
+                            <th style="width:100px">Typ</th>
+                            <th style="width:110px">Org.Einheit</th>
+                            <th style="width:110px">Kategorie</th>
+                            <th style="width:140px">Raum</th>
+                            <th style="width:130px">Person</th>
+                            <th style="width:100px">Zustand</th>
+                            <th style="width:90px">Wartung</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @{
+                        var today = DateOnly.FromDateTime(DateTime.Today);
+                        var warn30 = today.AddDays(30);
+                    }
+                    @foreach (var i in Model.Liste)
+                    {
+                        var wartungText = i.NaechsteWartung.HasValue ? i.NaechsteWartung.Value.ToString("dd.MM.yy") : "–";
+                        var wartungStatus = i.NaechsteWartung.HasValue
+                            ? (i.NaechsteWartung.Value < today ? "überfällig"
+                               : i.NaechsteWartung.Value <= warn30 ? "bald"
+                               : "ok")
+                            : "–";
+                        <tr class="bc-row-link @(i.Gesperrt ? "bc-row-gesperrt" : "")"
+                            data-id="@i.InventarId"
+                            data-url="/Inventar/Karte/@i.InventarId"
+                            data-nr="@i.InventarNr"
+                            data-name="@i.Bezeichnung"
+                            data-zustand="@i.ZustandText"
+                            data-zustand-style="@ZustandStyle(i.Zustand)"
+                            data-kategorie="@i.KategorieBezeichnung"
+                            data-raum="@(i.RaumAnzeige ?? "–")"
+                            data-person="@(i.PersonName ?? "–")"
+                            data-wartung="@wartungText"
+                            data-wartung-status="@wartungStatus">
+                            <td class="col-nr"><a href="/Inventar/Karte/@i.InventarId" onclick="openModalWithNav(this.href);return false">@i.InventarNr</a></td>
+                            <td>@i.Bezeichnung</td>
+                            <td style="color:#605e5c">
+                                @if (i.Typ != null) { @i.Typ } else { <span style="color:#a19f9d">–</span> }
+                            </td>
+                            <td style="color:#605e5c">
+                                @if (i.OrgEinheitAnzeige != null) { @i.OrgEinheitAnzeige } else { <span style="color:#a19f9d">–</span> }
+                            </td>
+                            <td style="color:#605e5c">@i.KategorieBezeichnung</td>
+                            <td style="color:#605e5c">
+                                @if (i.RaumAnzeige != null) { @i.RaumAnzeige } else { <span style="color:#a19f9d">–</span> }
+                            </td>
+                            <td style="color:#605e5c">
+                                @if (i.PersonName != null) { @i.PersonName } else { <span style="color:#a19f9d">–</span> }
+                            </td>
+                            <td><span class="bc-badge" style="@ZustandStyle(i.Zustand)">@i.ZustandText</span></td>
+                            <td>
+                                @if (i.NaechsteWartung.HasValue)
+                                {
+                                    if (i.NaechsteWartung.Value < today)
+                                    {
+                                        <span class="bc-badge" style="background:#fde7e9;color:#c50f1f;font-size:10px" title="Wartung überfällig!">
+                                            &#9888; @i.NaechsteWartung.Value.ToString("dd.MM.yy")
+                                        </span>
+                                    }
+                                    else if (i.NaechsteWartung.Value <= warn30)
+                                    {
+                                        <span class="bc-badge" style="background:#fff4ce;color:#8a6914;font-size:10px" title="Wartung bald fällig">
+                                            &#9200; @i.NaechsteWartung.Value.ToString("dd.MM.yy")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span style="font-size:11px;color:#605e5c">@i.NaechsteWartung.Value.ToString("dd.MM.yy")</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span style="color:#a19f9d">–</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (!Model.Liste.Any())
+                    {
+                        <tr><td colspan="9" style="text-align:center;color:#a19f9d;padding:16px">Keine Inventargegenstände vorhanden.</td></tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="bc-factbox" id="bc-factbox">
+            <div class="bc-factbox-header">Details</div>
+            <div class="bc-factbox-body" id="bc-factbox-body">
+                <p class="bc-factbox-empty">Zeile auswählen…</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    var table   = document.getElementById('bc-table');
+    var fbBody  = document.getElementById('bc-factbox-body');
+    var search  = document.getElementById('bc-search');
+    var countEl = document.getElementById('entry-count');
+    var allRows = table ? Array.from(table.querySelectorAll('tbody tr[data-id]')) : [];
+    var sel     = null;
+
+    function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function frow(l, v) {
+        return '<div class="bc-factbox-row"><span class="bc-factbox-label">' + l + '</span>'
+             + '<span class="bc-factbox-value">' + esc(v) + '</span></div>';
+    }
+
+    function buildFactbox(d) {
+        var zustandBadge = '<span class="bc-badge" style="' + esc(d.zustandStyle) + ';font-size:10px">' + esc(d.zustand) + '</span>';
+        var wartungHtml = '';
+        if (d.wartungStatus === 'überfällig') {
+            wartungHtml = '<span class="bc-badge" style="background:#fde7e9;color:#c50f1f;font-size:10px">&#9888; ' + esc(d.wartung) + '</span>';
+        } else if (d.wartungStatus === 'bald') {
+            wartungHtml = '<span class="bc-badge" style="background:#fff4ce;color:#8a6914;font-size:10px">&#9200; ' + esc(d.wartung) + '</span>';
+        } else {
+            wartungHtml = esc(d.wartung);
+        }
+        return '<div class="bc-factbox-title">' + esc(d.name) + '</div>'
+             + '<div class="bc-factbox-nr">' + esc(d.nr) + '</div>'
+             + '<div class="bc-factbox-badges">' + zustandBadge + '</div>'
+             + frow('Kategorie', d.kategorie)
+             + frow('Raum', d.raum)
+             + frow('Person', d.person)
+             + '<div class="bc-factbox-row"><span class="bc-factbox-label">Wartung</span><span class="bc-factbox-value">' + wartungHtml + '</span></div>'
+             + '<button class="bc-factbox-open" onclick="openModalWithNav(\'/Inventar/Karte/' + esc(d.id) + '\')">Karte öffnen ↗</button>';
+    }
+
+    function openModalWithNav(url) {
+        var vis = allRows.filter(function(r) { return !r.hidden; });
+        var idx = vis.findIndex(function(r) { return r.dataset.url === url; });
+        openModal(url, vis.map(function(r) { return r.dataset.url; }), idx);
+    }
+
+    allRows.forEach(function (tr) {
+        tr.addEventListener('click', function () {
+            if (sel) sel.classList.remove('bc-row-selected');
+            tr.classList.add('bc-row-selected');
+            sel = tr;
+            if (fbBody) fbBody.innerHTML = buildFactbox(tr.dataset);
+        });
+        tr.addEventListener('dblclick', function () { openModalWithNav(tr.dataset.url); });
+    });
+
+    if (search) {
+        search.addEventListener('input', function () {
+            var q = this.value.toLowerCase();
+            allRows.forEach(function (tr) { tr.hidden = q.length > 0 && !tr.textContent.toLowerCase().includes(q); });
+            updateCount();
+        });
+    }
+
+    function updateCount() {
+        var vis = allRows.filter(function (r) { return !r.hidden; }).length;
+        if (countEl) countEl.textContent = vis === allRows.length
+            ? allRows.length + ' Einträge'
+            : vis + ' von ' + allRows.length + ' Einträgen';
+    }
+    updateCount();
+})();
+</script>
+}

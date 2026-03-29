@@ -1,0 +1,278 @@
+@page
+@model Schulverwaltung.Web.Pages.Lehrgaenge.MeisterPatientenversorgungModel
+@{ ViewData["Title"] = Model.Abschnitt?.Bezeichnung ?? "Patientenversorgung"; }
+
+@functions {
+    static string BuchungsStatusStyle(byte s) => s switch {
+        0 => "background:#f3f2f1;color:#605e5c",
+        1 => "background:#cce4ff;color:#0078D4",
+        2 => "background:#dff6dd;color:#107C10",
+        _ => ""
+    };
+    static string BuchungsStatusText(byte s) => s switch {
+        0 => "Planung", 1 => "Bestätigt", 2 => "Gebucht", _ => ""
+    };
+    static string TerminStatusIcon(byte s) => s switch {
+        0 => "○", 1 => "◑", 2 => "✓", 3 => "✗", _ => "?"
+    };
+    static string TerminStatusStyle(byte s) => s switch {
+        2 => "color:#107C10;font-weight:600",
+        3 => "color:#c50f1f",
+        _ => "color:#605e5c"
+    };
+}
+
+<div class="bc-page">
+    @* Topbar *@
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Lehrgaenge/Karte/@Model.LehrgangId" class="bc-back-btn">&#x2190;</a>
+            <span class="bc-page-badge">Patientenversorgung | @Model.LehrgangNr</span>
+        </div>
+    </div>
+
+    @* Titel *@
+    <h1 class="bc-card-title">
+        <span class="bc-title-nr">@Model.LehrgangNr</span>
+        <span class="bc-title-sep"> › </span>
+        <span>@(Model.Abschnitt?.Bezeichnung ?? "Patientenversorgung")</span>
+    </h1>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+
+    @* Aktionsleiste *@
+    <div class="bc-action-bar" style="margin-bottom:12px">
+        <button type="button" class="bc-btn bc-btn-primary"
+                onclick="document.getElementById('modal-zuordnung').style.display='flex'">
+            + Patient zuordnen
+        </button>
+    </div>
+
+    @* Tabelle der Zuordnungen *@
+    <div class="bc-table-wrap">
+        <table class="bc-table" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Patient</th>
+                    <th>MS 1</th>
+                    <th>MS 2</th>
+                    <th style="width:70px">Ersatz</th>
+                    @if (Model.Abschnitt?.AbschnittTyp == 2)
+                    {
+                        <th style="width:90px">Zugelassen</th>
+                    }
+                    <th style="width:110px">Buchung</th>
+                    <th style="width:160px">Termine</th>
+                    <th style="width:160px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var z in Model.Zuordnungen)
+                {
+                    var t1 = z.Termine.FirstOrDefault(t => t.TerminTyp == 0);
+                    var t2 = z.Termine.FirstOrDefault(t => t.TerminTyp == 1);
+                    var t3 = z.Termine.FirstOrDefault(t => t.TerminTyp == 2);
+                    <tr>
+                        <td>@z.PatientName</td>
+                        <td style="font-size:12px">@z.MS1Name</td>
+                        <td style="font-size:12px;color:#605e5c">@(z.MS2Name ?? "–")</td>
+                        <td>
+                            @if (z.IstErsatz) { <span style="color:#D83B01;font-size:11px;font-weight:600">Ersatz</span> }
+                            else { <span style="color:#a19f9d">–</span> }
+                        </td>
+                        @if (Model.Abschnitt?.AbschnittTyp == 2)
+                        {
+                            <td>
+                                <form method="post" asp-page-handler="Zulassung" style="display:flex;gap:2px">
+                                    <input type="hidden" name="zuordnungId" value="@z.ZuordnungId" />
+                                    @if (z.Zugelassen == true)
+                                    {
+                                        <button name="zulassung" value="nein" type="submit" class="bc-btn bc-btn-sm" style="background:#dff6dd;color:#107C10;border-color:#107C10" title="Zugelassen – klicken zum Ändern">✓ Ja</button>
+                                    }
+                                    else if (z.Zugelassen == false)
+                                    {
+                                        <button name="zulassung" value="ja" type="submit" class="bc-btn bc-btn-sm" style="background:#fde7e9;color:#c50f1f;border-color:#c50f1f" title="Abgelehnt – klicken zum Ändern">✗ Nein</button>
+                                    }
+                                    else
+                                    {
+                                        <button name="zulassung" value="ja"   type="submit" class="bc-btn bc-btn-sm" style="font-size:11px">Ja</button>
+                                        <button name="zulassung" value="nein" type="submit" class="bc-btn bc-btn-sm" style="font-size:11px">Nein</button>
+                                    }
+                                </form>
+                            </td>
+                        }
+                        <td>
+                            <span style="@BuchungsStatusStyle(z.BuchungsStatus);padding:1px 6px;font-size:11px;border-radius:2px">
+                                @BuchungsStatusText(z.BuchungsStatus)
+                            </span>
+                        </td>
+                        <td style="font-size:11px">
+                            <span style="@TerminStatusStyle(t1?.Status ?? 0)" title="Vorstellung">V: @TerminStatusIcon(t1?.Status ?? 0) @(t1?.Datum?.ToString("dd.MM.") ?? "?")</span> |
+                            <span style="@TerminStatusStyle(t2?.Status ?? 0)" title="Zwischenprobe">Z: @TerminStatusIcon(t2?.Status ?? 0) @(t2?.Datum?.ToString("dd.MM.") ?? "?")</span> |
+                            <span style="@TerminStatusStyle(t3?.Status ?? 0)" title="Auslieferung">A: @TerminStatusIcon(t3?.Status ?? 0) @(t3?.Datum?.ToString("dd.MM.") ?? "?")</span>
+                        </td>
+                        <td style="white-space:nowrap">
+                            @if (z.BuchungsStatus == 0)
+                            {
+                                <button type="button" class="bc-btn bc-btn-sm"
+                                        onclick="openEditModal(@z.ZuordnungId)">Bearbeiten</button>
+                                <form method="post" asp-page-handler="Bestaetigen" style="display:inline">
+                                    <input type="hidden" name="zuordnungId" value="@z.ZuordnungId" />
+                                    <button type="submit" class="bc-btn bc-btn-sm bc-btn-primary">Bestätigen</button>
+                                </form>
+                            }
+                            @if (z.BuchungsStatus == 1 && t3?.Status == 2)
+                            {
+                                <form method="post" asp-page-handler="Buchen"
+                                      onsubmit="return confirm('Zuordnung wirklich buchen? Dieser Vorgang kann nicht rückgängig gemacht werden.')">
+                                    <input type="hidden" name="zuordnungId" value="@z.ZuordnungId" />
+                                    <button type="submit" class="bc-btn bc-btn-sm" style="background:#107C10;color:#fff;border-color:#107C10">Buchen</button>
+                                </form>
+                            }
+                            @if (z.BuchungsStatus == 2)
+                            {
+                                <span style="color:#107C10;font-size:11px;font-weight:600">✓ Gebucht</span>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Zuordnungen.Any())
+                {
+                    <tr><td colspan="@(Model.Abschnitt?.AbschnittTyp == 2 ? 8 : 7)"
+                           style="text-align:center;color:#a19f9d;padding:16px">
+                        Noch keine Patientenzuordnungen vorhanden.
+                    </td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@* Modal: Zuordnung anlegen/bearbeiten *@
+<div id="modal-zuordnung" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:#fff;padding:24px;min-width:500px;max-width:640px;max-height:90vh;overflow-y:auto;border:1px solid #ccc">
+        <h6 id="modal-titel" style="margin:0 0 16px 0;font-size:13px;font-weight:600">Patient zuordnen</h6>
+        <form method="post" asp-page-handler="ZuordnungSpeichern">
+            <input type="hidden" name="form.ZuordnungId" id="modal-zuordnung-id" value="0" />
+
+            <div class="bc-fields-2col">
+                <div class="bc-field bc-field-full">
+                    <span class="bc-field-label req">Patient</span>
+                    <span class="bc-field-dots"></span>
+                    <div class="bc-field-right bc-field-right-lg">
+                        <select name="form.PatientPersonId" id="modal-patient" class="bc-field-ctrl">
+                            <option value="0">– Patient wählen –</option>
+                            @foreach (var p in Model.PatientenListe)
+                            {
+                                <option value="@p.PersonId">@p.Name (@p.PersonNr)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="bc-field">
+                    <span class="bc-field-label req">Meisterschüler 1</span>
+                    <span class="bc-field-dots"></span>
+                    <div class="bc-field-right bc-field-right-lg">
+                        <select name="form.Meisterschueler1PersonId" id="modal-ms1" class="bc-field-ctrl">
+                            <option value="0">– MS 1 wählen –</option>
+                            @foreach (var t in Model.TeilnehmerListe)
+                            {
+                                <option value="@t.PersonId">@t.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="bc-field">
+                    <span class="bc-field-label">Meisterschüler 2</span>
+                    <span class="bc-field-dots"></span>
+                    <div class="bc-field-right bc-field-right-lg">
+                        <select name="form.Meisterschueler2PersonId" id="modal-ms2" class="bc-field-ctrl">
+                            <option value="">– optional –</option>
+                            @foreach (var t in Model.TeilnehmerListe)
+                            {
+                                <option value="@t.PersonId">@t.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="bc-field">
+                    <span class="bc-field-label">Zuordnungsstatus</span>
+                    <span class="bc-field-dots"></span>
+                    <div class="bc-field-right bc-field-right-md">
+                        <select name="form.ZuordnungsStatus" id="modal-zstatus" class="bc-field-ctrl">
+                            <option value="0">Angefragt</option>
+                            <option value="1">Zugesagt</option>
+                            <option value="2">Eingeteilt</option>
+                            <option value="3">Absage</option>
+                            <option value="4">Ersatz</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="bc-field-check">
+                    <input type="checkbox" name="form.IstErsatzpatient" id="modal-ersatz" value="true" />
+                    <label for="modal-ersatz">Ersatzpatient</label>
+                </div>
+            </div>
+
+            <p class="bc-section-title" style="margin-top:12px">Termine</p>
+            @{
+                var terminRows = new[] {
+                    ("Vorstellung",   "form.T1Datum", "form.T1Uhrzeit", "form.T1Status"),
+                    ("Zwischenprobe", "form.T2Datum", "form.T2Uhrzeit", "form.T2Status"),
+                    ("Auslieferung",  "form.T3Datum", "form.T3Uhrzeit", "form.T3Status")
+                };
+            }
+            @foreach (var (label, nDatum, nUhrzeit, nStatus) in terminRows)
+            {
+                <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+                    <span style="width:110px;font-size:12px;color:#605e5c">@label</span>
+                    <input type="date" name="@nDatum"  class="bc-field-ctrl bc-field-right-md" />
+                    <input type="time" name="@nUhrzeit" class="bc-field-ctrl" style="width:80px" />
+                    <select name="@nStatus" class="bc-field-ctrl" style="width:120px">
+                        <option value="0">Geplant</option>
+                        <option value="1">Bestätigt</option>
+                        <option value="2">Durchgeführt</option>
+                        <option value="3">Ausgefallen</option>
+                    </select>
+                </div>
+            }
+            <div style="margin-left:116px;margin-bottom:6px">
+                <select name="form.T3HilfsmittelUebergeben" class="bc-field-ctrl" style="width:180px">
+                    <option value="">Hilfsmittel: ausstehend</option>
+                    <option value="true">Hilfsmittel übergeben: Ja</option>
+                    <option value="false">Hilfsmittel übergeben: Nein</option>
+                </select>
+                <input name="form.T3NichtUebergebenGrund" class="bc-field-ctrl" style="width:200px;margin-left:4px"
+                       placeholder="Grund (falls nicht übergeben)" />
+            </div>
+
+            <div class="bc-field-block" style="margin-top:8px">
+                <label class="bc-field-label">Notiz</label>
+                <textarea name="form.Notiz" id="modal-notiz" class="bc-field-ctrl" rows="2"
+                          style="width:100%;resize:vertical"></textarea>
+            </div>
+
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+                <button type="button" class="bc-btn"
+                        onclick="document.getElementById('modal-zuordnung').style.display='none'">Abbrechen</button>
+                <button type="submit" class="bc-btn bc-btn-primary">Speichern</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+document.getElementById('modal-zuordnung').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+});
+function openEditModal(zuordnungId) {
+    document.getElementById('modal-zuordnung-id').value = zuordnungId;
+    document.getElementById('modal-titel').textContent = 'Zuordnung bearbeiten';
+    document.getElementById('modal-zuordnung').style.display = 'flex';
+}
+</script>
+}

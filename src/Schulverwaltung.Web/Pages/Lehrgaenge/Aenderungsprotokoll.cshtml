@@ -1,0 +1,75 @@
+@page
+@model Schulverwaltung.Web.Pages.Lehrgaenge.AenderungsprotokollModel
+@{ ViewData["Title"] = "Änderungsprotokoll"; }
+
+@functions {
+    static string EreignisStyle(string e) => e switch {
+        "LehrgangAngelegt"    => "background:#dff6dd;color:#107C10",
+        "StammdatenGeaendert" => "background:#cce4ff;color:#0078D4",
+        "StatusGeaendert"     => "background:#fff4ce;color:#8a6914",
+        "PersonHinzugefuegt"  => "background:#dff6dd;color:#107C10",
+        "PersonEntfernt"      => "background:#fde7e9;color:#c50f1f",
+        "EinheitHinzugefuegt" => "background:#dff6dd;color:#107C10",
+        "EinheitGeaendert"    => "background:#cce4ff;color:#0078D4",
+        _                     => "background:#f3f2f1;color:#323130"
+    };
+}
+
+<div class="bc-page">
+    @* Topbar *@
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Lehrgaenge/Karte/@Model.LehrgangId" class="bc-back-btn">&#x2190;</a>
+            <span class="bc-page-badge">Änderungsprotokoll | @Model.LehrgangNr</span>
+        </div>
+    </div>
+
+    <h1 class="bc-card-title">
+        <span class="bc-title-nr">@Model.LehrgangNr</span>
+        <span class="bc-title-sep"> · </span>
+        <span>Änderungsprotokoll</span>
+        <span style="margin-left:8px;font-size:13px;color:#605e5c;font-weight:400">
+            (@Model.Posten.Count Einträge)
+        </span>
+    </h1>
+
+    <table class="bc-table" style="width:100%">
+        <thead>
+            <tr>
+                <th>Beleg-Nr.</th>
+                <th>Ereignis</th>
+                <th>Feld</th>
+                <th>Alter Wert</th>
+                <th>Neuer Wert</th>
+                <th style="width:130px">Zeitstempel</th>
+                <th>Benutzer</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in Model.Posten)
+            {
+                <tr>
+                    <td><small style="color:#605e5c">@p.BelegNr</small></td>
+                    <td>
+                        <span style="padding:1px 6px;border-radius:2px;font-size:11px;@EreignisStyle(p.Ereignis)">
+                            @p.Ereignis
+                        </span>
+                    </td>
+                    <td style="font-size:12px">@(p.Feld ?? "–")</td>
+                    <td style="color:#a19f9d;font-size:12px">@(p.AlterWert ?? "–")</td>
+                    <td style="font-size:12px">@(p.NeuerWert ?? "–")</td>
+                    <td style="white-space:nowrap">
+                        <small>@p.Zeitstempel.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small>
+                    </td>
+                    <td><small>@p.User</small></td>
+                </tr>
+            }
+            @if (!Model.Posten.Any())
+            {
+                <tr><td colspan="7" style="text-align:center;color:#a19f9d;padding:12px">
+                    Keine Änderungen protokolliert.
+                </td></tr>
+            }
+        </tbody>
+    </table>
+</div>

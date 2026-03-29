@@ -1,0 +1,864 @@
+@page "{id:int?}"
+@model Schulverwaltung.Web.Pages.Personen.KarteModel
+@using Schulverwaltung.Domain.Entities
+@{ ViewData["Title"] = Model.Titel; }
+
+@functions {
+    string RolleClass(PersonRolleTyp r) => r switch {
+        PersonRolleTyp.Teilnehmer      => "bc-badge-rolle-teilnehmer",
+        PersonRolleTyp.Dozent          => "bc-badge-rolle-dozent",
+        PersonRolleTyp.Patient         => "bc-badge-rolle-patient",
+        PersonRolleTyp.Ansprechpartner => "bc-badge-rolle-ansprechpartner",
+        PersonRolleTyp.Pruefer         => "bc-badge-rolle-pruefer",
+        PersonRolleTyp.Betreuer        => "bc-badge-rolle-betreuer",
+        _                              => "bc-badge-planung"
+    };
+    string RolleText(PersonRolleTyp r) => r switch {
+        PersonRolleTyp.Teilnehmer      => "Teilnehmer",
+        PersonRolleTyp.Dozent          => "Dozent",
+        PersonRolleTyp.Patient         => "Patient",
+        PersonRolleTyp.Ansprechpartner => "Ansprechpartner",
+        PersonRolleTyp.Pruefer         => "Prüfer",
+        PersonRolleTyp.Betreuer        => "Betreuer",
+        _                              => r.ToString()
+    };
+    string EreignisStyle(string e) => e switch {
+        "RolleZugewiesen"        => "color:#107C10;font-weight:600",
+        "RolleEntzogen"          => "color:#D13438;font-weight:600",
+        "StammdatenGeaendert"    => "color:#0078D4;font-weight:600",
+        "Gesperrt"               => "color:#CA5010;font-weight:600",
+        "FotoGeaendert"          => "color:#5C2D91;font-weight:600",
+        "DozentProfilGeaendert"   => "color:#006B4F;font-weight:600",
+        "PatientProfilGeaendert"  => "color:#8764B8;font-weight:600",
+        _                         => "font-weight:600"
+    };
+    string FormatBytes(int bytes) {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024):F1} MB";
+    }
+}
+
+<div class="bc-page" style="max-width:none">
+
+    @if (!ModelState.IsValid)
+    {
+        <div class="bc-alert">
+            @foreach (var e in ModelState.Values.SelectMany(v => v.Errors))
+            { <div>@e.ErrorMessage</div> }
+        </div>
+    }
+    @if (TempData["Fehler"] != null)
+    {
+        <div class="bc-alert"><div>@TempData["Fehler"]</div></div>
+    }
+
+    @* Topbar *@
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Personen" class="bc-back-btn" title="Zurück zu Personen">&#x2190;</a>
+            <span class="bc-page-badge">PERSONEN-KARTE | Arbeitsdatum: @DateTime.Today.ToString("dd.MM.yyyy")</span>
+        </div>
+        <div class="bc-card-topbar-right">
+            <button type="submit" form="form-speichern" class="bc-icon-btn" title="Speichern">&#x2714;</button>
+            @if (!Model.IstNeu)
+            {
+                <a href="/Personen/Karte" class="bc-icon-btn" title="Neu">+</a>
+                <form method="post" asp-page-handler="Loeschen"
+                      onsubmit="return confirm('Person wirklich löschen?')" style="display:contents">
+                    <input type="hidden" name="id" value="@Model.Form.PersonId" />
+                    <button type="submit" class="bc-icon-btn bc-icon-btn-danger" title="Löschen">&#x1F5D1;</button>
+                </form>
+            }
+        </div>
+    </div>
+
+    @* Titel *@
+    <h1 class="bc-card-title">
+        @if (Model.IstNeu)
+        {
+            <span>Neue Person</span>
+        }
+        else
+        {
+            <span class="bc-title-nr">@Model.Form.PersonNr</span>
+            <span class="bc-title-sep"> · </span>
+            <span>@(Model.Form.Titel != null ? Model.Form.Titel + " " : "")@Model.Form.Vorname @Model.Form.Nachname</span>
+            @if (Model.Form.Gesperrt)
+            {
+                <span class="bc-title-status"><span class="bc-badge bc-badge-gesperrt">Gesperrt</span></span>
+            }
+        }
+    </h1>
+
+    @* Haupt-Bereich: Links (FastTabs) + Rechts (Seitenbereich) *@
+    <div style="display:flex;gap:16px;align-items:flex-start">
+
+        @* ── LINKER BEREICH (75%) ─────────────────────────────── *@
+        <div style="flex:3;min-width:0">
+
+            @* FastTab-Navigation *@
+            <nav class="bc-action-tabs">
+                <a href="#" class="bc-action-tab active" data-panel="panel-allgemein">Allgemein</a>
+                @if (!Model.IstNeu)
+                {
+                    <a href="#" class="bc-action-tab" data-panel="panel-rollen">Rollen (@Model.Rollen.Count(r => r.Aktiv))</a>
+                    @if (Model.HatDozent)
+                    {
+                        <a href="#" class="bc-action-tab" data-panel="panel-dozentprofil">Dozent-Profil</a>
+                    }
+                    @if (Model.HatPatient)
+                    {
+                        <a href="#" class="bc-action-tab" data-panel="panel-patientprofil">Patienten-Profil</a>
+                    }
+                    <a href="#" class="bc-action-tab" data-panel="panel-protokoll">Änderungsprotokoll (@Model.Aenderungsposten.Count)</a>
+                }
+            </nav>
+
+            @* ── Panel: Allgemein ──────────────────────────────── *@
+            <div id="panel-allgemein" class="bc-tab-panel active">
+                <form id="form-speichern" method="post" asp-page-handler="Speichern">
+                    <input type="hidden" asp-for="Form.PersonId" />
+
+                    <p class="bc-section-title">Stammdaten</p>
+
+                    @* Zwei Spalten mit je eigenen Feldern *@
+                    <div style="display:flex;gap:24px;align-items:flex-start">
+
+                        @* Linke Spalte *@
+                        <div style="flex:1;min-width:0">
+                            @if (!Model.IstNeu)
+                            {
+                                <div class="bc-field">
+                                    <span class="bc-field-label">Nr.</span>
+                                    <span class="bc-field-dots"></span>
+                                    <div class="bc-field-right" style="flex:1">
+                                        <input class="bc-field-ctrl" style="width:100%" value="@Model.Form.PersonNr" readonly />
+                                    </div>
+                                </div>
+                            }
+                            <div class="bc-field">
+                                <span class="bc-field-label">Anrede</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <select asp-for="Form.Anrede" class="bc-field-ctrl" style="width:100%">
+                                        <option value="">–</option>
+                                        <option value="Herr">Herr</option>
+                                        <option value="Frau">Frau</option>
+                                        <option value="Divers">Divers</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">Titel</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <input asp-for="Form.Titel" class="bc-field-ctrl" style="width:100%" placeholder="Dr., Prof., ..." />
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label req">Vorname</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <input asp-for="Form.Vorname" class="bc-field-ctrl" style="width:100%" />
+                                    <span asp-validation-for="Form.Vorname" class="bc-field-err"></span>
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label req">Nachname</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <input asp-for="Form.Nachname" class="bc-field-ctrl" style="width:100%" />
+                                    <span asp-validation-for="Form.Nachname" class="bc-field-err"></span>
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">Namenszusatz</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <input asp-for="Form.Namenszusatz" class="bc-field-ctrl" style="width:100%" />
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">Geburtsname</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <input asp-for="Form.Geburtsname" class="bc-field-ctrl" style="width:100%" />
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">Geburtsort</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <input asp-for="Form.Geburtsort" class="bc-field-ctrl" style="width:100%" />
+                                </div>
+                            </div>
+                        </div>
+
+                        @* Rechte Spalte *@
+                        <div style="flex:1;min-width:0">
+                            <div class="bc-field">
+                                <span class="bc-field-label">Geburtsdatum</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <input asp-for="Form.Geburtsdatum" class="bc-field-ctrl" style="width:100%" type="date" />
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">Nationalität</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <input asp-for="Form.Nationalitaet" class="bc-field-ctrl" style="width:100%" />
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">Geschlecht</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <select asp-for="Form.Geschlecht" class="bc-field-ctrl" style="width:100%">
+                                        <option value="">–</option>
+                                        <option value="1">Männlich</option>
+                                        <option value="2">Weiblich</option>
+                                        <option value="3">Divers</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">E-Mail</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <input asp-for="Form.Email" class="bc-field-ctrl" style="width:100%" type="email" />
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">Telefon</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <input asp-for="Form.Telefon" class="bc-field-ctrl" style="width:100%" />
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">Mobil</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right" style="flex:1">
+                                    <input asp-for="Form.Mobil" class="bc-field-ctrl" style="width:100%" />
+                                </div>
+                            </div>
+                            <div class="bc-field-check" style="padding:3px 0">
+                                <input asp-for="Form.Gesperrt" type="checkbox" id="chk-gesperrt" />
+                                <label for="chk-gesperrt">Gesperrt</label>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    @* Adresse *@
+                    <p class="bc-section-title" style="margin-top:14px">Adresse</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field">
+                            <span class="bc-field-label">Straße</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Strasse" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">PLZ</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-sm">
+                                <input asp-for="Form.PLZ" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Ort</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Ort" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Land</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.Land" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Notiz *@
+                    <p class="bc-section-title" style="margin-top:14px">Sonstiges</p>
+                    <div class="bc-field-full" style="padding:4px 0">
+                        <span class="bc-field-label">Notiz (intern)</span>
+                        <textarea asp-for="Form.Notiz" class="bc-field-ctrl" rows="3"
+                                  style="width:100%;resize:vertical"></textarea>
+                    </div>
+
+                </form>
+            </div>
+
+            @if (!Model.IstNeu)
+            {
+                @* ── Panel: Rollen ─────────────────────────────── *@
+                <div id="panel-rollen" class="bc-tab-panel">
+                    <p class="bc-section-title">Rollen zuweisen</p>
+                    <div class="bc-role-toggles">
+                        @{
+                            var rollenDef = new[]
+                            {
+                                ((byte)0, "Teilnehmer",      Model.HatTeilnehmer),
+                                ((byte)1, "Dozent",           Model.HatDozent),
+                                ((byte)2, "Patient",          Model.HatPatient),
+                                ((byte)3, "Ansprechpartner",  Model.HatAnsprechpartner),
+                                ((byte)4, "Prüfer",           Model.HatPruefer),
+                                ((byte)5, "Betreuer",         Model.HatBetreuer),
+                            };
+                        }
+                        @foreach (var (rolleTyp, label, hatRolle) in rollenDef)
+                        {
+                            <form method="post"
+                                  asp-page-handler="@(hatRolle ? "RolleEntfernen" : "RolleZuweisen")"
+                                  style="display:inline">
+                                <input type="hidden" name="id" value="@Model.Form.PersonId" />
+                                <input type="hidden" name="rolleTyp" value="@rolleTyp" />
+                                <label class="bc-role-toggle @(hatRolle ? "active" : "")">
+                                    <input type="checkbox" @(hatRolle ? "checked" : "")
+                                           onchange="this.closest('form').submit()" />
+                                    @label
+                                </label>
+                            </form>
+                        }
+                    </div>
+
+                    <p class="bc-section-title" style="margin-top:12px">Rollen-Übersicht</p>
+                    <table class="bc-inner-table">
+                        <thead>
+                            <tr>
+                                <th>Rolle</th><th>Status</th><th>Betrieb</th>
+                                <th>Gültig ab</th><th>Gültig bis</th><th>Notiz</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in Model.Rollen)
+                            {
+                                <tr class="@(r.Aktiv ? "" : "table-secondary")">
+                                    <td><span class="bc-badge @RolleClass(r.RolleTyp)">@RolleText(r.RolleTyp)</span></td>
+                                    <td>@(r.Aktiv ? "Aktiv" : "Inaktiv")</td>
+                                    <td>
+                                        @if (r.Aktiv)
+                                        {
+                                            <form method="post" asp-page-handler="RolleBetriebSetzen"
+                                                  style="display:flex;gap:4px;align-items:center">
+                                                <input type="hidden" name="rolleId" value="@r.PersonRolleId" />
+                                                <select name="betriebId" class="bc-field-ctrl" style="height:22px;font-size:11px;min-width:140px">
+                                                    <option value="">– kein Betrieb –</option>
+                                                    @foreach (var b in Model.BetriebListe)
+                                                    {
+                                                        if (r.BetriebName == b.Name)
+                                                        {
+                                                            <option value="@b.BetriebId" selected>@b.Name</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            <option value="@b.BetriebId">@b.Name</option>
+                                                        }
+                                                    }
+                                                </select>
+                                                <button type="submit" class="bc-btn bc-btn-sm" style="height:22px;padding:0 6px;font-size:11px">✔</button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            @(r.BetriebName ?? "–")
+                                        }
+                                    </td>
+                                    <td>@r.GueltigAb.ToString("dd.MM.yyyy")</td>
+                                    <td>@(r.GueltigBis?.ToString("dd.MM.yyyy") ?? "–")</td>
+                                    <td>@(r.Notiz ?? "–")</td>
+                                </tr>
+                            }
+                            @if (!Model.Rollen.Any())
+                            {
+                                <tr><td colspan="6" style="text-align:center;color:#a19f9d;padding:12px">Keine Rollen zugewiesen</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @* ── Panel: Dozent-Profil (nur bei aktiver Dozent-Rolle) ── *@
+                @if (Model.HatDozent)
+                {
+                    <div id="panel-dozentprofil" class="bc-tab-panel">
+                        <form method="post" asp-page-handler="DozentProfilSpeichern" id="form-dozent">
+                            <input type="hidden" asp-for="DozentProfil.PersonId" />
+
+                            @* ── Abschnitt: Allgemein ───────────────────── *@
+                            <p class="bc-section-title">Allgemein</p>
+                            <div class="bc-fields-2col">
+                                <div class="bc-field">
+                                    <span class="bc-field-label">Kürzel</span>
+                                    <span class="bc-field-dots"></span>
+                                    <div class="bc-field-right bc-field-right-sm">
+                                        <input asp-for="DozentProfil.Kuerzel" class="bc-field-ctrl" maxlength="10" />
+                                    </div>
+                                </div>
+                                <div class="bc-field">
+                                    <span class="bc-field-label">Max. Std./Woche</span>
+                                    <span class="bc-field-dots"></span>
+                                    <div class="bc-field-right bc-field-right-sm">
+                                        <input asp-for="DozentProfil.MaxStundenProWoche" class="bc-field-ctrl"
+                                               type="number" min="0" step="0.5" />
+                                    </div>
+                                </div>
+                                <div class="bc-field-check" style="align-self:center;padding:4px 0">
+                                    <input asp-for="DozentProfil.Intern" type="checkbox" id="chk-intern" />
+                                    <label for="chk-intern">Intern (nicht extern)</label>
+                                </div>
+                                <div class="bc-field-full" style="padding-top:4px">
+                                    <span class="bc-field-label" style="display:block;margin-bottom:3px">Bemerkungen</span>
+                                    <textarea asp-for="DozentProfil.Bemerkungen" class="bc-field-ctrl"
+                                              rows="3" style="width:100%;resize:vertical"></textarea>
+                                </div>
+                            </div>
+
+                            @* ── Abschnitt: Fachbereiche ────────────────── *@
+                            <p class="bc-section-title" style="margin-top:14px">Fachbereiche</p>
+                            <div class="bc-role-toggles">
+                                <label class="bc-role-toggle @(Model.DozentProfil.IstOrthopaedie ? "active" : "")">
+                                    <input asp-for="DozentProfil.IstOrthopaedie" type="checkbox"
+                                           onchange="this.closest('label').classList.toggle('active',this.checked)" />
+                                    Orthopädie
+                                </label>
+                                <label class="bc-role-toggle @(Model.DozentProfil.IstPodologie ? "active" : "")">
+                                    <input asp-for="DozentProfil.IstPodologie" type="checkbox"
+                                           onchange="this.closest('label').classList.toggle('active',this.checked)" />
+                                    Podologie
+                                </label>
+                                <label class="bc-role-toggle @(Model.DozentProfil.IstMedizin ? "active" : "")">
+                                    <input asp-for="DozentProfil.IstMedizin" type="checkbox"
+                                           onchange="this.closest('label').classList.toggle('active',this.checked)" />
+                                    Medizin
+                                </label>
+                            </div>
+
+                            @* ── Abschnitt: Vergütung ───────────────────── *@
+                            <p class="bc-section-title" style="margin-top:14px">Vergütung</p>
+                            <div style="max-width:480px">
+                                <div class="bc-field">
+                                    <span class="bc-field-label">Theoriestunde</span>
+                                    <span class="bc-field-dots"></span>
+                                    <div class="bc-field-right bc-field-right-md" style="display:flex;align-items:center;gap:4px">
+                                        <input asp-for="DozentProfil.KostenTheoriestunde"
+                                               class="bc-field-ctrl sv-currency-field"
+                                               type="number" min="0" step="0.01"
+                                               style="text-align:right;width:110px" />
+                                        <span style="color:#605e5c;font-size:12px">€</span>
+                                    </div>
+                                </div>
+                                <div class="bc-field">
+                                    <span class="bc-field-label">Praxisstunde</span>
+                                    <span class="bc-field-dots"></span>
+                                    <div class="bc-field-right bc-field-right-md" style="display:flex;align-items:center;gap:4px">
+                                        <input asp-for="DozentProfil.KostenPraxisstunde"
+                                               class="bc-field-ctrl sv-currency-field"
+                                               type="number" min="0" step="0.01"
+                                               style="text-align:right;width:110px" />
+                                        <span style="color:#605e5c;font-size:12px">€</span>
+                                    </div>
+                                </div>
+                                <div class="bc-field">
+                                    <span class="bc-field-label">Fahrtkosten</span>
+                                    <span class="bc-field-dots"></span>
+                                    <div class="bc-field-right bc-field-right-md" style="display:flex;align-items:center;gap:4px">
+                                        <input asp-for="DozentProfil.Fahrtkosten"
+                                               class="bc-field-ctrl sv-currency-field"
+                                               type="number" min="0" step="0.01"
+                                               style="text-align:right;width:110px" />
+                                        <span style="color:#605e5c;font-size:12px">€</span>
+                                    </div>
+                                </div>
+                                <div class="bc-field" style="margin-top:6px">
+                                    <span class="bc-field-label">IBAN</span>
+                                    <span class="bc-field-dots"></span>
+                                    <div class="bc-field-right bc-field-right-lg">
+                                        <input asp-for="DozentProfil.IBAN"
+                                               id="iban-input"
+                                               class="bc-field-ctrl"
+                                               type="text" maxlength="42"
+                                               placeholder="DE00 0000 0000 0000 0000 00"
+                                               style="width:220px;letter-spacing:1px;text-transform:uppercase;font-family:monospace"
+                                               autocomplete="off" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="margin-top:14px">
+                                <button type="submit" class="bc-btn bc-btn-primary">Speichern</button>
+                            </div>
+                        </form>
+                    </div>
+                }
+
+                @* ── Panel: Patienten-Profil (nur bei aktiver Patient-Rolle) ── *@
+                @if (Model.HatPatient)
+                {
+                    <div id="panel-patientprofil" class="bc-tab-panel">
+                        <form method="post" asp-page-handler="PatientProfilSpeichern">
+                            <input type="hidden" asp-for="PatientProfil.PersonId" />
+
+                            @* ── Abschnitt: Körperdaten ─────────────────── *@
+                            <p class="bc-section-title">Körperdaten</p>
+                            <div style="display:flex;gap:32px">
+                                <div class="bc-field">
+                                    <span class="bc-field-label">Größe</span>
+                                    <span class="bc-field-dots"></span>
+                                    <div class="bc-field-right" style="display:flex;align-items:center;gap:4px">
+                                        <input asp-for="PatientProfil.Groesse"
+                                               class="bc-field-ctrl"
+                                               type="number" min="50" max="250"
+                                               placeholder="175"
+                                               style="width:80px;text-align:right" />
+                                        <span style="color:#605e5c;font-size:12px">cm</span>
+                                    </div>
+                                </div>
+                                <div class="bc-field">
+                                    <span class="bc-field-label">Gewicht</span>
+                                    <span class="bc-field-dots"></span>
+                                    <div class="bc-field-right" style="display:flex;align-items:center;gap:4px">
+                                        <input asp-for="PatientProfil.Gewicht"
+                                               class="bc-field-ctrl"
+                                               type="number" min="20" max="300" step="0.1"
+                                               placeholder="72.5"
+                                               style="width:90px;text-align:right" />
+                                        <span style="color:#605e5c;font-size:12px">kg</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @* ── Abschnitt: Medizinische Hinweise ──────── *@
+                            <p class="bc-section-title" style="margin-top:14px">Medizinische Hinweise</p>
+                            <div class="bc-role-toggles">
+                                <label class="bc-role-toggle @(Model.PatientProfil.IstDiabetiker ? "active" : "")">
+                                    <input asp-for="PatientProfil.IstDiabetiker" type="checkbox"
+                                           onchange="this.closest('label').classList.toggle('active',this.checked)" />
+                                    Diabetiker
+                                </label>
+                            </div>
+
+                            @* ── Abschnitt: Geeignet für Patientenversorgung ── *@
+                            <p class="bc-section-title" style="margin-top:14px">Geeignet für Patientenversorgung</p>
+                            <div class="bc-role-toggles" style="flex-direction:column;gap:6px">
+                                <label class="bc-role-toggle @(Model.PatientProfil.GeeignetPV1 ? "active" : "")">
+                                    <input asp-for="PatientProfil.GeeignetPV1" type="checkbox"
+                                           onchange="this.closest('label').classList.toggle('active',this.checked)" />
+                                    Patientenversorgung 1
+                                </label>
+                                <label class="bc-role-toggle @(Model.PatientProfil.GeeignetPV2 ? "active" : "")">
+                                    <input asp-for="PatientProfil.GeeignetPV2" type="checkbox"
+                                           onchange="this.closest('label').classList.toggle('active',this.checked)" />
+                                    Patientenversorgung 2
+                                </label>
+                                <label class="bc-role-toggle @(Model.PatientProfil.GeeignetPV3 ? "active" : "")">
+                                    <input asp-for="PatientProfil.GeeignetPV3" type="checkbox"
+                                           onchange="this.closest('label').classList.toggle('active',this.checked)" />
+                                    Patientenversorgung 3
+                                </label>
+                                <label class="bc-role-toggle @(Model.PatientProfil.GeeignetPV4 ? "active" : "")">
+                                    <input asp-for="PatientProfil.GeeignetPV4" type="checkbox"
+                                           onchange="this.closest('label').classList.toggle('active',this.checked)" />
+                                    Patientenversorgung 4
+                                </label>
+                                <label class="bc-role-toggle @(Model.PatientProfil.GeeignetPVPruefung ? "active" : "")">
+                                    <input asp-for="PatientProfil.GeeignetPVPruefung" type="checkbox"
+                                           onchange="this.closest('label').classList.toggle('active',this.checked)" />
+                                    Prüfung
+                                </label>
+                            </div>
+
+                            @* ── Abschnitt: Bemerkungen ─────────────────── *@
+                            <p class="bc-section-title" style="margin-top:14px">Bemerkungen</p>
+                            <textarea asp-for="PatientProfil.Bemerkungen"
+                                      class="bc-field-ctrl" rows="4"
+                                      style="width:100%;resize:vertical"></textarea>
+
+                            <div style="margin-top:14px">
+                                <button type="submit" class="bc-btn bc-btn-primary">Speichern</button>
+                            </div>
+                        </form>
+                    </div>
+                }
+
+                @* ── Panel: Änderungsprotokoll ──────────────────── *@
+                <div id="panel-protokoll" class="bc-tab-panel">
+                    <table class="bc-inner-table">
+                        <thead>
+                            <tr>
+                                <th>Datum/Zeit</th>
+                                <th>Ereignis</th>
+                                <th>Feld</th>
+                                <th>Alter Wert</th>
+                                <th>Neuer Wert</th>
+                                <th>User</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var a in Model.Aenderungsposten)
+                            {
+                                <tr>
+                                    <td style="white-space:nowrap">@a.Zeitstempel.ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td><span style="@EreignisStyle(a.Ereignis)">@a.Ereignis</span></td>
+                                    <td>@(a.Feld ?? "–")</td>
+                                    <td>@(a.AlterWert ?? "–")</td>
+                                    <td>@(a.NeuerWert ?? "–")</td>
+                                    <td style="white-space:nowrap">@a.AusfuehrendUser</td>
+                                </tr>
+                            }
+                            @if (!Model.Aenderungsposten.Any())
+                            {
+                                <tr><td colspan="6" style="text-align:center;color:#a19f9d;padding:12px">Keine Einträge</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+        </div>
+        @* ── Ende linker Bereich ──────────────────────────────────────── *@
+
+        @* ── RECHTER SEITENBEREICH (25%) – immer sichtbar ────────────── *@
+        @if (!Model.IstNeu)
+        {
+            <div style="flex:1;min-width:280px" class="bc-side-container">
+
+                @* Side-Tabs: Details | Anhänge *@
+                <div class="bc-side-tabs">
+                    <a href="#" class="bc-side-tab active" data-side-panel="side-details">Details</a>
+                    <a href="#" class="bc-side-tab" data-side-panel="side-anhaenge">
+                        Anhänge (@Model.Anhaenge.Count)
+                    </a>
+                </div>
+
+                @* ── Side-Panel: Details ──────────────────────────── *@
+                <div id="side-details" class="bc-side-panel active">
+
+                    @* Kontaktbild *@
+                    <div class="bc-photo-wrap">
+                        <form method="post" asp-page-handler="FotoHochladen"
+                              enctype="multipart/form-data" id="form-foto">
+                            <input type="hidden" name="id" value="@Model.Form.PersonId" />
+                            <input type="file" name="foto" id="foto-input"
+                                   accept="image/jpeg,image/png" style="display:none"
+                                   onchange="this.form.submit()" />
+                        </form>
+                        <div class="bc-photo-circle" onclick="document.getElementById('foto-input').click()"
+                             title="Klicken zum Foto ändern">
+                            @if (Model.Form.HatFoto)
+                            {
+                                <img src="/Personen/Karte?handler=Foto&id=@Model.Form.PersonId"
+                                     alt="Kontaktfoto" />
+                            }
+                            else
+                            {
+                                @* Platzhalter-SVG (BC-Stil) *@
+                                <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="40" cy="30" r="18" fill="#c8c6c4"/>
+                                    <path d="M4 72 C4 52 76 52 76 72" fill="#c8c6c4"/>
+                                </svg>
+                            }
+                        </div>
+                        <span class="bc-photo-hint">Klicken zum @(Model.Form.HatFoto ? "Ändern" : "Hochladen")</span>
+                    </div>
+
+                    <hr style="border:none;border-top:1px solid #edebe9;margin:0 0 8px" />
+
+                    @* Kontaktstatistik *@
+                    <div style="font-size:12px;font-weight:700;color:#323130;margin-bottom:6px">Kontaktstatistik</div>
+
+                    <div class="bc-stat-section-title">Allgemein</div>
+                    <div class="bc-stat-row">
+                        <span class="bc-stat-desc">Aktive Rollen</span>
+                        <a class="bc-stat-val" href="/Personen/Karte?id=@Model.Form.PersonId&tab=rollen">
+                            @Model.Statistik.AnzahlRollenAktiv
+                        </a>
+                    </div>
+                    <div class="bc-stat-row">
+                        <span class="bc-stat-desc">Lehrgänge gesamt</span>
+                        <a class="bc-stat-val" href="/Lehrgaenge?PersonId=@Model.Form.PersonId">
+                            @Model.Statistik.AnzahlLehrgaengeGesamt
+                        </a>
+                    </div>
+
+                    <div class="bc-stat-section-title">Lehrgänge</div>
+                    <div class="bc-stat-row">
+                        <span class="bc-stat-desc">Laufend</span>
+                        <a class="bc-stat-val" href="/Lehrgaenge?PersonId=@Model.Form.PersonId&Status=2">
+                            @Model.Statistik.LaufendeLehrgaenge
+                        </a>
+                    </div>
+                    <div class="bc-stat-row">
+                        <span class="bc-stat-desc">Abgeschlossen</span>
+                        <a class="bc-stat-val" href="/Lehrgaenge?PersonId=@Model.Form.PersonId&Status=3">
+                            @Model.Statistik.AbgeschlosseneLehrgaenge
+                        </a>
+                    </div>
+                    <div class="bc-stat-row">
+                        <span class="bc-stat-desc">Abgebrochen</span>
+                        <a class="bc-stat-val" href="/Lehrgaenge?PersonId=@Model.Form.PersonId&Status=4">
+                            @Model.Statistik.AbgebrocheneLehrgaenge
+                        </a>
+                    </div>
+
+                </div>
+
+                @* ── Side-Panel: Anhänge ──────────────────────────── *@
+                <div id="side-anhaenge" class="bc-side-panel">
+
+                    @* Upload-Bereich *@
+                    <div class="bc-anhang-upload">
+                        <button type="button" class="bc-btn bc-btn-primary"
+                                onclick="document.getElementById('anhang-form-wrap').style.display='block';this.style.display='none'"
+                                style="font-size:12px;padding:4px 10px">
+                            + Anhang hinzufügen
+                        </button>
+                        <div id="anhang-form-wrap" style="display:none;margin-top:8px;padding:8px;background:#f3f2f1;border:1px solid #edebe9">
+                            <form method="post" asp-page-handler="AnhangHochladen"
+                                  enctype="multipart/form-data">
+                                <input type="hidden" name="id" value="@Model.Form.PersonId" />
+                                <div style="margin-bottom:5px">
+                                    <label style="font-size:12px;display:block;margin-bottom:2px">Bezeichnung</label>
+                                    <input type="text" name="bezeichnung" class="bc-field-ctrl" style="width:100%" />
+                                </div>
+                                <div style="margin-bottom:6px">
+                                    <label style="font-size:12px;display:block;margin-bottom:2px">Datei</label>
+                                    <input type="file" name="datei" class="bc-field-ctrl" style="width:100%" />
+                                </div>
+                                <div style="display:flex;gap:6px">
+                                    <button type="submit" class="bc-btn bc-btn-primary" style="font-size:12px;padding:3px 10px">Speichern</button>
+                                    <button type="button" class="bc-btn" style="font-size:12px;padding:3px 10px"
+                                            onclick="document.getElementById('anhang-form-wrap').style.display='none';document.querySelector('.bc-anhang-upload>.bc-btn').style.display=''">
+                                        Abbrechen
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    @* Anhang-Liste *@
+                    @if (Model.Anhaenge.Any())
+                    {
+                        <table class="bc-anhang-table">
+                            <thead>
+                                <tr>
+                                    <th>Bezeichnung</th>
+                                    <th>Typ</th>
+                                    <th>Größe</th>
+                                    <th>Hochgeladen</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var a in Model.Anhaenge)
+                                {
+                                    <tr>
+                                        <td>
+                                            <a class="bc-anhang-link"
+                                               href="/Personen/Karte?handler=Anhang&anhangId=@a.AnhangId"
+                                               title="@a.DateiName">
+                                                @a.Bezeichnung
+                                            </a>
+                                        </td>
+                                        <td style="color:#605e5c">@a.DateiTyp.Split('/').LastOrDefault()</td>
+                                        <td style="white-space:nowrap">@FormatBytes(a.DateiGroesse)</td>
+                                        <td style="white-space:nowrap;font-size:11px">@a.HochgeladenAm.ToString("dd.MM.yy HH:mm")</td>
+                                        <td>
+                                            <form method="post" asp-page-handler="AnhangLoeschen"
+                                                  onsubmit="return confirm('Anhang wirklich löschen?')"
+                                                  style="display:inline">
+                                                <input type="hidden" name="id" value="@Model.Form.PersonId" />
+                                                <input type="hidden" name="anhangId" value="@a.AnhangId" />
+                                                <button type="submit" class="bc-anhang-btn" title="Löschen">✕</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    else
+                    {
+                        <div style="color:#a19f9d;font-size:12px;text-align:center;padding:20px 0">
+                            Keine Anhänge vorhanden
+                        </div>
+                    }
+
+                </div>
+                @* Ende Side-Panel Anhänge *@
+
+            </div>
+        }
+        @* ── Ende rechter Seitenbereich ───────────────────────────────────── *@
+
+    </div>
+    @* Ende Haupt-Bereich Flex *@
+
+</div>
+@* Ende Seiten-Container *@
+
+@section Scripts {
+<script>
+(function () {
+    // ── FastTabs (linker Bereich) ────────────────────────────
+    var tabs   = document.querySelectorAll('.bc-action-tab');
+    var panels = document.querySelectorAll('.bc-tab-panel');
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function (e) {
+            e.preventDefault();
+            tabs.forEach(function (t)   { t.classList.remove('active'); });
+            panels.forEach(function (p) { p.classList.remove('active'); });
+            tab.classList.add('active');
+            var panel = document.getElementById(tab.dataset.panel);
+            if (panel) panel.classList.add('active');
+        });
+    });
+
+    // ── IBAN-Formatierung ────────────────────────────────────
+    var ibanInput = document.getElementById('iban-input');
+    if (ibanInput) {
+        ibanInput.addEventListener('input', function () {
+            var pos   = this.selectionStart;
+            var raw   = this.value.replace(/\s/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+            var fmt   = raw.match(/.{1,4}/g)?.join(' ') ?? raw;
+            var diff  = fmt.length - this.value.length;
+            this.value = fmt;
+            this.setSelectionRange(pos + diff, pos + diff);
+        });
+        // Vor Submit: Leerzeichen entfernen – Rohdaten in DB
+        var dozentForm = document.getElementById('form-dozent');
+        if (dozentForm) {
+            dozentForm.addEventListener('submit', function () {
+                ibanInput.value = ibanInput.value.replace(/\s/g, '').toUpperCase();
+            });
+        }
+        // Beim Laden: formatiert anzeigen
+        (function () {
+            var raw = ibanInput.value.replace(/\s/g, '');
+            if (raw) ibanInput.value = raw.match(/.{1,4}/g)?.join(' ') ?? raw;
+        })();
+    }
+
+    // ── Side-Tabs (rechter Bereich) ──────────────────────────
+    var sideTabs   = document.querySelectorAll('.bc-side-tab');
+    var sidePanels = document.querySelectorAll('.bc-side-panel');
+    sideTabs.forEach(function (tab) {
+        tab.addEventListener('click', function (e) {
+            e.preventDefault();
+            sideTabs.forEach(function (t)   { t.classList.remove('active'); });
+            sidePanels.forEach(function (p) { p.classList.remove('active'); });
+            tab.classList.add('active');
+            var panel = document.getElementById(tab.dataset.sidePanel);
+            if (panel) panel.classList.add('active');
+        });
+    });
+})();
+</script>
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+}

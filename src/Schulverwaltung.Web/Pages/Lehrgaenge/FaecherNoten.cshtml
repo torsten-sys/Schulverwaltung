@@ -1,0 +1,165 @@
+@page
+@model Schulverwaltung.Web.Pages.Lehrgaenge.FaecherNotenModel
+@{ ViewData["Title"] = "Fächer & Noten"; }
+
+<div class="bc-page">
+    @* Topbar *@
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Lehrgaenge/Karte/@Model.LehrgangId" class="bc-back-btn">&#x2190;</a>
+            <span class="bc-page-badge">Fächer &amp; Noten | @Model.LehrgangNr</span>
+        </div>
+        <div class="bc-card-topbar-right">
+            <button type="submit" form="form-fach-neu" class="bc-icon-btn" title="Fach speichern">&#x2714;</button>
+        </div>
+    </div>
+
+    <h1 class="bc-card-title">
+        <span class="bc-title-nr">@Model.LehrgangNr</span>
+        <span class="bc-title-sep"> · </span>
+        <span>Fächer &amp; Noten</span>
+    </h1>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+
+    @* ── Fächerliste ─────────────────────────────────────────────────────── *@
+    <p class="bc-section-title">Fächer</p>
+    <table class="bc-table" style="width:100%;margin-bottom:12px">
+        <thead>
+            <tr>
+                <th style="width:30px">#</th>
+                <th>Bezeichnung</th>
+                <th style="width:110px">Gewichtung</th>
+                <th style="width:60px"></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var f in Model.Faecher)
+            {
+                <tr>
+                    <td style="color:#605e5c">@f.Reihenfolge</td>
+                    <td>
+                        <form method="post" asp-page-handler="FachSpeichern"
+                              style="display:flex;gap:4px">
+                            <input type="hidden" name="fachId" value="@f.FachId" />
+                            <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+                            <input type="hidden" name="reihenfolge" value="@f.Reihenfolge" />
+                            <input name="bezeichnung" value="@f.Bezeichnung"
+                                   class="bc-field-ctrl" style="flex:1" />
+                            <input name="gewichtung" type="number" step="0.1" min="0.1"
+                                   value="@f.Gewichtung.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)"
+                                   class="bc-field-ctrl" style="width:70px;text-align:right" />
+                            <button type="submit" class="bc-btn bc-btn-primary bc-btn-sm">&#x2714;</button>
+                        </form>
+                    </td>
+                    <td style="color:#605e5c;font-size:12px">@f.Gewichtung.ToString("0.0")</td>
+                    <td>
+                        <form method="post" asp-page-handler="FachLoeschen"
+                              onsubmit="return confirm('Fach löschen? Alle Noten für dieses Fach werden ebenfalls gelöscht.')">
+                            <input type="hidden" name="fachId" value="@f.FachId" />
+                            <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+                            <button type="submit" class="bc-btn-remove">&#x2715;</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            @if (!Model.Faecher.Any())
+            {
+                <tr><td colspan="4" style="text-align:center;color:#a19f9d;padding:10px">
+                    Keine Fächer angelegt.
+                </td></tr>
+            }
+        </tbody>
+    </table>
+
+    @* Neues Fach *@
+    <form id="form-fach-neu" method="post" asp-page-handler="FachSpeichern"
+          style="display:flex;gap:6px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
+        <input type="hidden" name="fachId" value="0" />
+        <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+        <input name="bezeichnung" class="bc-field-ctrl" style="width:220px"
+               placeholder="Neue Fachbezeichnung" required />
+        <input name="gewichtung" type="number" step="0.1" min="0.1" value="1.0"
+               class="bc-field-ctrl" style="width:90px" placeholder="Gewichtung" />
+        <input name="reihenfolge" type="number" min="1"
+               value="@(Model.Faecher.Any() ? Model.Faecher.Max(f => f.Reihenfolge) + 1 : 1)"
+               class="bc-field-ctrl" style="width:70px" placeholder="Reihenfolge" />
+        <button type="submit" class="bc-btn bc-btn-primary">+ Fach hinzufügen</button>
+    </form>
+
+    @* ── Notenmatrix ──────────────────────────────────────────────────────── *@
+    @if (Model.Faecher.Any() && Model.Noten.Any())
+    {
+        <p class="bc-section-title">Notenübersicht</p>
+        <div style="overflow-x:auto">
+            <table class="bc-table" style="font-size:11px;min-width:500px">
+                <thead>
+                    <tr>
+                        <th style="min-width:160px">Teilnehmer</th>
+                        @foreach (var f in Model.Faecher)
+                        {
+                            <th style="min-width:55px;text-align:center;writing-mode:vertical-rl;height:80px;white-space:nowrap">
+                                @f.Bezeichnung
+                            </th>
+                        }
+                        <th style="min-width:60px;text-align:center">Gesamt</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var person in Model.Noten.Values.OrderBy(p => p.PersonName))
+                    {
+                        <tr>
+                            <td style="font-size:11px">
+                                <a href="/Lehrgaenge/MeisterNotenTeilnehmer?lehrgangId=@Model.LehrgangId&personId=@person.PersonId"
+                                   style="color:#00B7C3;text-decoration:none">@person.PersonName</a>
+                            </td>
+                            @foreach (var f in Model.Faecher)
+                            {
+                                var note = person.FachNoten.TryGetValue(f.FachId, out var n) ? n : null;
+                                var noteStyle = note?.Note switch {
+                                    1 or 2 => "background:#dff6dd;color:#107C10",
+                                    3 or 4 => "background:#fff4ce;color:#8a6914",
+                                    5 or 6 => "background:#fde7e9;color:#c50f1f",
+                                    _       => "background:#f3f2f1;color:#a19f9d;font-style:italic"
+                                };
+                                <td style="text-align:center;padding:2px">
+                                    <span style="@noteStyle;display:inline-block;width:36px;padding:1px 0;font-size:11px;font-weight:600">
+                                        @(note?.Note?.ToString() ?? "–")
+                                    </span>
+                                </td>
+                            }
+                            <td style="text-align:center;font-weight:700;color:@(person.Gesamtnote.HasValue ? "#1F3864" : "#a19f9d")">
+                                @(person.Gesamtnote?.ToString("0.0") ?? "–")
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px">
+            <a href="/Lehrgaenge/MeisterNotenFach?lehrgangId=@Model.LehrgangId" class="bc-btn bc-btn-primary">
+                Noten eintragen (nach Fach) ↗
+            </a>
+            <a href="/Lehrgaenge/Karte/@Model.LehrgangId?handler=NotenCsv&id=@Model.LehrgangId"
+               class="bc-btn">CSV Export</a>
+        </div>
+    }
+    else if (!Model.Faecher.Any())
+    {
+        <p style="color:#a19f9d;text-align:center;padding:16px">
+            Erst Fächer anlegen, dann werden die Noten hier angezeigt.
+        </p>
+    }
+    else
+    {
+        <p style="color:#a19f9d;text-align:center;padding:16px">
+            Noch keine Noten erfasst.
+            <a href="/Lehrgaenge/MeisterNotenFach?lehrgangId=@Model.LehrgangId" style="color:#00B7C3">
+                Noten eintragen ↗
+            </a>
+        </p>
+    }
+</div>

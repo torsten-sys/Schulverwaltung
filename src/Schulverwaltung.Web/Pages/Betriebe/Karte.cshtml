@@ -1,0 +1,628 @@
+@page "{id:int?}"
+@model Schulverwaltung.Web.Pages.Betriebe.KarteModel
+@using Schulverwaltung.Domain.Entities
+@{ ViewData["Title"] = Model.Titel; }
+
+<div class="bc-page" style="max-width:none">
+
+    @if (!ModelState.IsValid)
+    {
+        <div class="bc-alert">
+            @foreach (var e in ModelState.Values.SelectMany(v => v.Errors))
+            { <div>@e.ErrorMessage</div> }
+        </div>
+    }
+
+    @* Topbar *@
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Betriebe" class="bc-back-btn" title="Zurück zu Betriebe">&#x2190;</a>
+            <span class="bc-page-badge">Betriebs-Karte | Arbeitsdatum: @DateTime.Today.ToString("dd.MM.yyyy")</span>
+        </div>
+        <div class="bc-card-topbar-right">
+            <button type="submit" form="form-speichern" class="bc-icon-btn" title="Speichern (✔)">&#x2714;</button>
+            @if (!Model.IstNeu)
+            {
+                <a href="/Betriebe/Karte" class="bc-icon-btn" title="Neuer Betrieb (+)">+</a>
+                <form method="post" asp-page-handler="Loeschen"
+                      onsubmit="return confirm('Betrieb wirklich löschen?')" style="display:contents">
+                    <input type="hidden" name="id" value="@Model.Form.BetriebId" />
+                    <button type="submit" class="bc-icon-btn bc-icon-btn-danger" title="Löschen">&#x1F5D1;</button>
+                </form>
+            }
+        </div>
+    </div>
+
+    @* Title *@
+    <h1 class="bc-card-title">
+        @if (Model.IstNeu)
+        {
+            <span>Neuer Betrieb</span>
+        }
+        else
+        {
+            <span class="bc-title-nr">@Model.Form.BetriebNr</span>
+            <span class="bc-title-sep"> · </span>
+            <span>@Model.Form.Name</span>
+            @if (!string.IsNullOrWhiteSpace(Model.Form.Name2))
+            {
+                <span style="color:#605e5c;font-weight:400;font-size:16px"> – @Model.Form.Name2</span>
+            }
+            @if (Model.Form.Gesperrt)
+            {
+                <span class="bc-title-status"><span class="bc-badge bc-badge-gesperrt">Gesperrt</span></span>
+            }
+        }
+    </h1>
+
+    @* Action Tabs *@
+    <nav class="bc-action-tabs">
+        <a href="#" class="bc-action-tab active" data-panel="panel-allgemein">Allgemein</a>
+        @if (!Model.IstNeu)
+        {
+            <a href="#" class="bc-action-tab" data-panel="panel-personen">Personen (@Model.Personen.Count)</a>
+            <a href="#" class="bc-action-tab" data-panel="panel-lehrgaenge">Lehrgänge (@Model.Lehrgaenge.Count)</a>
+            <a href="#" class="bc-action-tab" data-panel="panel-protokoll">Änderungsprotokoll (@Model.Aenderungsposten.Count)</a>
+        }
+    </nav>
+
+    @* 75/25 Layout *@
+    <div style="display:flex;gap:16px;align-items:flex-start">
+
+        @* ── LINKE SEITE (FastTabs) ─────────────────────────────────────────── *@
+        <div style="flex:3;min-width:0">
+
+            @* Panel: Allgemein *@
+            <div id="panel-allgemein" class="bc-tab-panel active">
+                <form id="form-speichern" method="post" asp-page-handler="Speichern">
+                    <input type="hidden" asp-for="Form.BetriebId" />
+
+                    <p class="bc-section-title">Stammdaten</p>
+                    <div class="bc-fields-2col">
+                        @if (!Model.IstNeu)
+                        {
+                            <div class="bc-field">
+                                <span class="bc-field-label">Nr.</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right bc-field-right-md">
+                                    <input class="bc-field-ctrl" value="@Model.Form.BetriebNr" readonly />
+                                </div>
+                            </div>
+                        }
+                        <div class="bc-field">
+                            <span class="bc-field-label req">Name</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Name" class="bc-field-ctrl" />
+                                <span asp-validation-for="Form.Name" class="bc-field-err"></span>
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Name 2</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Name2" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Ansprechpartner</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <select asp-for="Form.AnsprechpartnerPersonId" class="bc-field-ctrl">
+                                    <option value="">– keine Auswahl –</option>
+                                    @foreach (var p in Model.PersonenListe)
+                                    {
+                                        <option value="@p.PersonId">@p.AnzeigeName (@p.PersonNr)</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Ausbilder</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <select asp-for="Form.AusbilderPersonId" class="bc-field-ctrl">
+                                    <option value="">– keine Auswahl –</option>
+                                    @foreach (var p in Model.PersonenListe)
+                                    {
+                                        <option value="@p.PersonId">@p.AnzeigeName (@p.PersonNr)</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="bc-section-title">Kontakt</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field">
+                            <span class="bc-field-label">Telefon</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.Telefon" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">E-Mail</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Email" class="bc-field-ctrl" type="email" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Website</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Website" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="bc-section-title">Adresse</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field">
+                            <span class="bc-field-label">Straße</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Strasse" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">PLZ</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-sm">
+                                <input asp-for="Form.PLZ" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Ort</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.Ort" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Land</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.Land" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Rechnungsadresse – Bootstrap Collapse *@
+                    <p class="bc-section-title" style="cursor:pointer" data-bs-toggle="collapse"
+                       data-bs-target="#rechAdresse" aria-expanded="false">
+                        Rechnungsadresse <span style="font-size:11px;color:#605e5c;font-weight:400">▼ ausklappen</span>
+                    </p>
+                    <div id="rechAdresse" class="collapse">
+                        <div class="bc-fields-2col">
+                            <div class="bc-field">
+                                <span class="bc-field-label">Zusatz</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right bc-field-right-lg">
+                                    <input asp-for="Form.RechZusatz" class="bc-field-ctrl" />
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">Straße</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right bc-field-right-lg">
+                                    <input asp-for="Form.RechStrasse" class="bc-field-ctrl" />
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">PLZ</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right bc-field-right-sm">
+                                    <input asp-for="Form.RechPLZ" class="bc-field-ctrl" />
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">Ort</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right bc-field-right-md">
+                                    <input asp-for="Form.RechOrt" class="bc-field-ctrl" />
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">Land</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right bc-field-right-md">
+                                    <input asp-for="Form.RechLand" class="bc-field-ctrl" />
+                                </div>
+                            </div>
+                            <div class="bc-field">
+                                <span class="bc-field-label">E-Mail Rechnung</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right bc-field-right-lg">
+                                    <input asp-for="Form.RechEmail" class="bc-field-ctrl" type="email" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="bc-section-title">Organisationen</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field">
+                            <span class="bc-field-label">Innung</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg" style="display:flex;align-items:center;gap:4px">
+                                <select asp-for="Form.InnungsId" class="bc-field-ctrl" style="flex:1" id="sel-innung">
+                                    <option value="">– keine –</option>
+                                    @foreach (var o in Model.InnungsListe)
+                                    {
+                                        <option value="@o.OrganisationId">@o.AnzeigeName (@o.OrganisationsNr)</option>
+                                    }
+                                </select>
+                                @if (!Model.IstNeu && Model.Form.InnungsId.HasValue)
+                                {
+                                    <a href="/Organisationen/Karte/@Model.Form.InnungsId" target="_blank"
+                                       class="bc-icon-btn" title="Innung öffnen" style="font-size:14px;line-height:1">&#x2192;</a>
+                                }
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Handwerkskammer</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg" style="display:flex;align-items:center;gap:4px">
+                                <select asp-for="Form.HandwerkskammerId" class="bc-field-ctrl" style="flex:1" id="sel-hwk">
+                                    <option value="">– keine –</option>
+                                    @foreach (var o in Model.HwkListe)
+                                    {
+                                        <option value="@o.OrganisationId">@o.AnzeigeName (@o.OrganisationsNr)</option>
+                                    }
+                                </select>
+                                @if (!Model.IstNeu && Model.Form.HandwerkskammerId.HasValue)
+                                {
+                                    <a href="/Organisationen/Karte/@Model.Form.HandwerkskammerId" target="_blank"
+                                       class="bc-icon-btn" title="Handwerkskammer öffnen" style="font-size:14px;line-height:1">&#x2192;</a>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="bc-section-title">Merkmale</p>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 0 8px 0">
+                        <label class="bc-role-toggle @(Model.Form.IstOrthopaedie ? "active" : "")" for="chk-ortho">
+                            <input type="checkbox" asp-for="Form.IstOrthopaedie" id="chk-ortho" />
+                            Orthopädie
+                        </label>
+                        <label class="bc-role-toggle @(Model.Form.IstPodologie ? "active" : "")" for="chk-podo">
+                            <input type="checkbox" asp-for="Form.IstPodologie" id="chk-podo" />
+                            Podologie
+                        </label>
+                        <label class="bc-role-toggle @(Model.Form.IstEmailVerteiler ? "active" : "")" for="chk-email">
+                            <input type="checkbox" asp-for="Form.IstEmailVerteiler" id="chk-email" />
+                            E-Mail-Verteiler
+                        </label>
+                        <label class="bc-role-toggle @(Model.Form.IstFoerdermittelberechtigt ? "active" : "")" for="chk-foerd">
+                            <input type="checkbox" asp-for="Form.IstFoerdermittelberechtigt" id="chk-foerd" />
+                            Fördermittelberechtigt
+                        </label>
+                        <label class="bc-role-toggle @(Model.Form.DsgvoCheck ? "active" : "")" for="chk-dsgvo">
+                            <input type="checkbox" asp-for="Form.DsgvoCheck" id="chk-dsgvo" />
+                            DSGVO-Check
+                        </label>
+                    </div>
+
+                    <p class="bc-section-title">Sonstiges</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field-check">
+                            <input asp-for="Form.Gesperrt" type="checkbox" id="chk-gesperrt" />
+                            <label for="chk-gesperrt">Gesperrt</label>
+                        </div>
+                        <div class="bc-field-full">
+                            <div class="bc-field-block">
+                                <span class="bc-field-label">Notiz (intern)</span>
+                                <textarea asp-for="Form.Notiz" class="bc-field-ctrl" rows="3"
+                                          style="width:100%"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            @if (!Model.IstNeu)
+            {
+                @* Panel: Personen *@
+                <div id="panel-personen" class="bc-tab-panel">
+                    <table class="bc-table" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>Nr.</th><th>Nachname</th><th>Vorname</th>
+                                <th>Rolle</th><th>E-Mail</th><th>Telefon</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in Model.Personen)
+                            {
+                                <tr onclick="location.href='/Personen/Karte/@p.PersonId'" style="cursor:pointer">
+                                    <td>@p.PersonNr</td>
+                                    <td>@p.Nachname</td>
+                                    <td>@p.Vorname</td>
+                                    <td>@p.Rolle</td>
+                                    <td>@(p.Email ?? "–")</td>
+                                    <td>@(p.Telefon ?? "–")</td>
+                                </tr>
+                            }
+                            @if (!Model.Personen.Any())
+                            {
+                                <tr><td colspan="6" style="text-align:center;color:#a19f9d;padding:12px">
+                                    Keine Personen zugeordnet
+                                </td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @* Panel: Lehrgänge *@
+                <div id="panel-lehrgaenge" class="bc-tab-panel">
+                    <table class="bc-table" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>Nr.</th><th>Bezeichnung</th>
+                                <th>Start</th><th>Ende</th><th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var l in Model.Lehrgaenge)
+                            {
+                                <tr onclick="location.href='/Lehrgaenge/Karte/@l.LehrgangId'" style="cursor:pointer">
+                                    <td>@l.LehrgangNr</td>
+                                    <td>@l.Bezeichnung</td>
+                                    <td>@l.StartDatum.ToString("dd.MM.yyyy")</td>
+                                    <td>@(l.EndDatum?.ToString("dd.MM.yyyy") ?? "–")</td>
+                                    <td>@l.Status</td>
+                                </tr>
+                            }
+                            @if (!Model.Lehrgaenge.Any())
+                            {
+                                <tr><td colspan="5" style="text-align:center;color:#a19f9d;padding:12px">
+                                    Keine Lehrgänge gefunden
+                                </td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @* Panel: Änderungsprotokoll *@
+                <div id="panel-protokoll" class="bc-tab-panel">
+                    <table class="bc-table" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>Beleg-Nr.</th><th>Ereignis</th><th>Feld</th>
+                                <th>Alter Wert</th><th>Neuer Wert</th>
+                                <th>Zeitstempel</th><th>Benutzer</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var ap in Model.Aenderungsposten)
+                            {
+                                <tr>
+                                    <td><small style="color:#605e5c">@ap.BelegNr</small></td>
+                                    <td>
+                                        <span style="padding:1px 6px;border-radius:2px;font-size:11px;
+                                                     @EreignisStyle(ap.Ereignis)">
+                                            @ap.Ereignis
+                                        </span>
+                                    </td>
+                                    <td>@(ap.Feld ?? "–")</td>
+                                    <td style="color:#a19f9d">@(ap.AlterWert ?? "–")</td>
+                                    <td>@(ap.NeuerWert ?? "–")</td>
+                                    <td style="white-space:nowrap">
+                                        <small>@ap.Zeitstempel.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small>
+                                    </td>
+                                    <td><small>@ap.User</small></td>
+                                </tr>
+                            }
+                            @if (!Model.Aenderungsposten.Any())
+                            {
+                                <tr><td colspan="7" style="text-align:center;color:#a19f9d;padding:12px">
+                                    Keine Änderungen protokolliert
+                                </td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+        </div>
+
+        @* ── RECHTE SEITE (Side-Panel) – nur bei bestehenden Betrieben ─────── *@
+        @if (!Model.IstNeu)
+        {
+            <div style="flex:1;min-width:280px">
+                <div class="bc-side-container">
+                    <div class="bc-side-tabs">
+                        <a href="#" class="bc-side-tab active" data-side="side-details">Details</a>
+                        <a href="#" class="bc-side-tab" data-side="side-anhaenge">
+                            Anhänge (@Model.Anhaenge.Count)
+                        </a>
+                    </div>
+
+                    @* Side-Panel: Details *@
+                    <div id="side-details" class="bc-side-panel active">
+                        <p class="bc-stat-section-title">PERSONEN</p>
+                        <div class="bc-stat-row">
+                            <span class="bc-stat-desc">Gesamt</span>
+                            <span class="bc-stat-val">@Model.Statistik.AnzahlPersonen</span>
+                        </div>
+                        <div class="bc-stat-row">
+                            <span class="bc-stat-desc">Teilnehmer</span>
+                            <span class="bc-stat-val">@Model.Statistik.AnzahlTeilnehmer</span>
+                        </div>
+                        <div class="bc-stat-row">
+                            <span class="bc-stat-desc">Dozenten</span>
+                            <span class="bc-stat-val">@Model.Statistik.AnzahlDozenten</span>
+                        </div>
+                        <p class="bc-stat-section-title" style="margin-top:10px">LEHRGÄNGE</p>
+                        <div class="bc-stat-row">
+                            <span class="bc-stat-desc">Beteiligt an</span>
+                            <span class="bc-stat-val">@Model.Statistik.AnzahlLehrgaenge</span>
+                        </div>
+
+                        @if (Model.Form.IstOrthopaedie || Model.Form.IstPodologie ||
+                             Model.Form.IstEmailVerteiler || Model.Form.IstFoerdermittelberechtigt ||
+                             Model.Form.DsgvoCheck)
+                        {
+                            <p class="bc-stat-section-title" style="margin-top:10px">MERKMALE</p>
+                            @if (Model.Form.IstOrthopaedie)
+                            {
+                                <div class="bc-stat-row">
+                                    <span class="bc-stat-desc">Orthopädie</span>
+                                    <span style="color:#107C10;font-size:12px">✔</span>
+                                </div>
+                            }
+                            @if (Model.Form.IstPodologie)
+                            {
+                                <div class="bc-stat-row">
+                                    <span class="bc-stat-desc">Podologie</span>
+                                    <span style="color:#107C10;font-size:12px">✔</span>
+                                </div>
+                            }
+                            @if (Model.Form.IstEmailVerteiler)
+                            {
+                                <div class="bc-stat-row">
+                                    <span class="bc-stat-desc">E-Mail-Verteiler</span>
+                                    <span style="color:#107C10;font-size:12px">✔</span>
+                                </div>
+                            }
+                            @if (Model.Form.IstFoerdermittelberechtigt)
+                            {
+                                <div class="bc-stat-row">
+                                    <span class="bc-stat-desc">Fördermittelberechtigt</span>
+                                    <span style="color:#107C10;font-size:12px">✔</span>
+                                </div>
+                            }
+                            @if (Model.Form.DsgvoCheck)
+                            {
+                                <div class="bc-stat-row">
+                                    <span class="bc-stat-desc">DSGVO-Check</span>
+                                    <span style="color:#107C10;font-size:12px">✔</span>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    @* Side-Panel: Anhänge *@
+                    <div id="side-anhaenge" class="bc-side-panel">
+                        <div class="bc-anhang-upload">
+                            <form method="post" asp-page-handler="AnhangHochladen"
+                                  enctype="multipart/form-data">
+                                <input type="hidden" name="betriebId" value="@Model.Form.BetriebId" />
+                                <div style="margin-bottom:4px">
+                                    <input name="bezeichnung" class="bc-field-ctrl"
+                                           placeholder="Bezeichnung" style="width:100%;margin-bottom:4px" />
+                                    <input type="file" name="datei" class="bc-field-ctrl"
+                                           style="width:100%;margin-bottom:4px" />
+                                </div>
+                                <button type="submit" class="bc-anhang-btn" style="width:100%">
+                                    ↑ Hochladen
+                                </button>
+                            </form>
+                        </div>
+
+                        @if (Model.Anhaenge.Any())
+                        {
+                            <table class="bc-anhang-table">
+                                <thead>
+                                    <tr><th>Bezeichnung</th><th>Größe</th><th></th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var a in Model.Anhaenge)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a href="/Betriebe/Karte?handler=Anhang&id=@a.AnhangId"
+                                                   class="bc-anhang-link" title="@a.DateiName">
+                                                    @a.Bezeichnung
+                                                </a>
+                                            </td>
+                                            <td style="white-space:nowrap">
+                                                @(a.DateiGroesse > 1024*1024
+                                                    ? $"{a.DateiGroesse/1024/1024:F1} MB"
+                                                    : $"{a.DateiGroesse/1024:F0} KB")
+                                            </td>
+                                            <td>
+                                                <form method="post" asp-page-handler="AnhangLoeschen"
+                                                      onsubmit="return confirm('Anhang löschen?')"
+                                                      style="display:inline">
+                                                    <input type="hidden" name="anhangId" value="@a.AnhangId" />
+                                                    <input type="hidden" name="betriebId" value="@Model.Form.BetriebId" />
+                                                    <button type="submit" class="bc-anhang-btn"
+                                                            style="border-color:#d83b01;color:#d83b01">✕</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <p style="color:#a19f9d;font-size:12px;text-align:center;margin-top:12px">
+                                Noch keine Anhänge vorhanden.
+                            </p>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+    </div>@* end 75/25 *@
+
+</div>@* end bc-page *@
+
+@functions {
+    static string EreignisStyle(string ereignis) => ereignis switch
+    {
+        "BetriebAngelegt"        => "background:#dff6dd;color:#107C10",
+        "StammdatenGeaendert"    => "background:#cce4ff;color:#0078D4",
+        "AnsprechpartnerGeaendert" => "background:#fff4ce;color:#8a6914",
+        "Gesperrt"               => "background:#fde7e9;color:#c50f1f",
+        "Entsperrt"              => "background:#dff6dd;color:#107C10",
+        _                        => "background:#f3f2f1;color:#323130"
+    };
+}
+
+@section Scripts {
+<script>
+(function () {
+    // FastTabs
+    var tabs   = document.querySelectorAll('.bc-action-tab');
+    var panels = document.querySelectorAll('.bc-tab-panel');
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function (e) {
+            e.preventDefault();
+            tabs.forEach(function (t) { t.classList.remove('active'); });
+            panels.forEach(function (p) { p.classList.remove('active'); });
+            tab.classList.add('active');
+            var panel = document.getElementById(tab.dataset.panel);
+            if (panel) panel.classList.add('active');
+        });
+    });
+
+    // Side-Tabs
+    var sideTabs   = document.querySelectorAll('.bc-side-tab');
+    var sidePanels = document.querySelectorAll('.bc-side-panel');
+    sideTabs.forEach(function (tab) {
+        tab.addEventListener('click', function (e) {
+            e.preventDefault();
+            sideTabs.forEach(function (t) { t.classList.remove('active'); });
+            sidePanels.forEach(function (p) { p.classList.remove('active'); });
+            tab.classList.add('active');
+            var panel = document.getElementById(tab.dataset.side);
+            if (panel) panel.classList.add('active');
+        });
+    });
+
+    // Merkmale-Toggles (BC-style)
+    document.querySelectorAll('.bc-role-toggle input[type="checkbox"]').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            this.closest('.bc-role-toggle').classList.toggle('active', this.checked);
+        });
+    });
+})();
+</script>
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+}

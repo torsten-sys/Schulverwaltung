@@ -1,0 +1,701 @@
+@page "{id:int?}"
+@model Schulverwaltung.Web.Pages.Inventar.KarteModel
+@using Schulverwaltung.Infrastructure.Services
+@{ ViewData["Title"] = Model.Titel; }
+
+@functions {
+    static string ZustandStyle(byte z) => z switch {
+        0 => "background:#dff6dd;color:#107C10",
+        1 => "background:#fff4ce;color:#8a6914",
+        2 => "background:#fde7e9;color:#c50f1f",
+        3 => "background:#f3f2f1;color:#605e5c",
+        _ => "background:#f3f2f1;color:#605e5c"
+    };
+    static string WartungStyle(DateOnly? nw)
+    {
+        if (!nw.HasValue) return "color:#605e5c";
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (nw.Value < today) return "color:#c50f1f;font-weight:600";
+        if (nw.Value <= today.AddDays(30)) return "color:#8a6914;font-weight:600";
+        return "color:#107C10";
+    }
+    static string FormatBytes(int bytes) {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024*1024) return $"{bytes/1024} KB";
+        return $"{bytes/1024/1024} MB";
+    }
+}
+
+<div class="bc-page" style="max-width:none">
+
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Inventar" class="bc-back-btn" title="Zurück zur Inventarliste">&#x2190;</a>
+            <span class="bc-page-badge">INVENTAR | Arbeitsdatum: @DateTime.Today.ToString("dd.MM.yyyy")</span>
+        </div>
+        <div class="bc-card-topbar-right">
+            <button type="submit" form="form-speichern" class="bc-icon-btn" title="Speichern (✔)">&#x2714;</button>
+            @if (!Model.IstNeu)
+            {
+                <a href="/Inventar/Karte" class="bc-icon-btn" title="Neuer Gegenstand (+)">+</a>
+                <form method="post" asp-page-handler="Loeschen"
+                      onsubmit="return confirm('Inventargegenstand wirklich löschen?')" style="display:contents">
+                    <input type="hidden" asp-for="Form.InventarId" />
+                    <button type="submit" class="bc-icon-btn bc-icon-btn-danger" title="Löschen">&#x1F5D1;</button>
+                </form>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.Meldung))
+    {
+        <div class="bc-alert bc-alert-success">@Model.Meldung</div>
+    }
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert bc-alert-danger">@Model.Fehler</div>
+    }
+
+    <h1 class="bc-card-title">
+        @if (Model.IstNeu)
+        {
+            <span>Neuer Inventargegenstand</span>
+        }
+        else
+        {
+            <span class="bc-title-nr">@Model.Form.InventarNr</span>
+            <span class="bc-title-sep"> · </span>
+            <span>@Model.Form.Bezeichnung</span>
+            @if (!string.IsNullOrEmpty(Model.Form.Typ))
+            {
+                <span style="color:#605e5c;font-weight:400"> – @Model.Form.Typ</span>
+            }
+            <span class="bc-title-status" style="@ZustandStyle(Model.Form.Zustand)">@InventarService.ZustandText(Model.Form.Zustand)</span>
+            @if (Model.Form.Gesperrt)
+            {
+                <span class="bc-title-status" style="background:#fde7e9;color:#c50f1f">Gesperrt</span>
+            }
+        }
+    </h1>
+
+    <nav class="bc-action-tabs">
+        <a href="#" class="bc-action-tab active" data-panel="panel-allgemein">Allgemein</a>
+        <a href="#" class="bc-action-tab" data-panel="panel-standort">Standort</a>
+        <a href="#" class="bc-action-tab" data-panel="panel-anschaffung">Anschaffung</a>
+        <a href="#" class="bc-action-tab" data-panel="panel-komponenten">Komponenten (@Model.Komponenten.Count)</a>
+        <a href="#" class="bc-action-tab" data-panel="panel-wartung">Wartung</a>
+        @if (!Model.IstNeu)
+        {
+            <a href="#" class="bc-action-tab" data-panel="panel-protokoll">Protokoll (@Model.Protokoll.Count)</a>
+        }
+    </nav>
+
+    <div style="display:flex;gap:16px;align-items:flex-start">
+        <div style="flex:3;min-width:0">
+
+            <form id="form-speichern" method="post" asp-page-handler="Speichern">
+                <input type="hidden" asp-for="Form.InventarId" />
+
+                @* ALLGEMEIN *@
+                <div id="panel-allgemein" class="bc-tab-panel active">
+                    <p class="bc-section-title">Stammdaten</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field">
+                            <span class="bc-field-label">Inventar-Nr.</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input class="bc-field-ctrl" value="@(Model.IstNeu ? "(wird automatisch vergeben)" : Model.Form.InventarNr)" readonly style="color:#605e5c" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Bezeichnung</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Bezeichnung" class="bc-field-ctrl" maxlength="200" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Typ / Baureihe</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Typ" class="bc-field-ctrl" maxlength="100" placeholder="z.B. Modell, Baureihe, Variante" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Kategorie</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <select asp-for="Form.KategorieId" class="bc-field-ctrl">
+                                    <option value="0">– bitte wählen –</option>
+                                    @foreach (var k in Model.KategorienListe)
+                                    {
+                                        <option value="@k.KategorieId">@k.Bezeichnung</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Organisationseinheit</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <select asp-for="Form.OrgEinheitId" class="bc-field-ctrl">
+                                    <option value="">– keine –</option>
+                                    @foreach (var o in Model.OrgEinheitenListe)
+                                    {
+                                        <option value="@o.OrgEinheitId">@o.Code · @o.Bezeichnung</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Seriennummer</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Seriennummer" class="bc-field-ctrl" maxlength="100" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Zustand</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg" style="display:flex;gap:6px;align-items:center">
+                                <select asp-for="Form.Zustand" class="bc-field-ctrl" id="sel-zustand" onchange="updateZustandBadge()">
+                                    <option value="0">Gut</option>
+                                    <option value="1">Beschädigt</option>
+                                    <option value="2">Defekt</option>
+                                    <option value="3">Ausgemustert</option>
+                                </select>
+                                <span id="zustand-badge" class="bc-badge" style="font-size:11px"></span>
+                            </div>
+                        </div>
+                        <div class="bc-field-check">
+                            <input asp-for="Form.Gesperrt" type="checkbox" id="chk-gesperrt" />
+                            <label for="chk-gesperrt" style="font-size:13px">Gesperrt</label>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Sperrgrund</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.SperrGrund" class="bc-field-ctrl" maxlength="200" />
+                            </div>
+                        </div>
+                        <div class="bc-field-block bc-field-full">
+                            <label class="bc-field-label">Notiz</label>
+                            <textarea asp-for="Form.Notiz" class="bc-field-ctrl" rows="3" style="width:100%;resize:vertical"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                @* STANDORT *@
+                <div id="panel-standort" class="bc-tab-panel">
+                    <p class="bc-section-title">Standort</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field bc-field-full">
+                            <span class="bc-field-label">Raum</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <select asp-for="Form.RaumId" class="bc-field-ctrl">
+                                    <option value="">– kein Raum –</option>
+                                    @foreach (var r in Model.RaeumeListe)
+                                    {
+                                        <option value="@r.RaumId">@r.RaumNr · @r.Bezeichnung</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="bc-field bc-field-full">
+                            <span class="bc-field-label">Zugeordnete Person</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <select asp-for="Form.PersonId" class="bc-field-ctrl">
+                                    <option value="">– keine Person –</option>
+                                    @foreach (var p in Model.PersonenListe)
+                                    {
+                                        <option value="@p.PersonId">@p.PersonNr · @p.Nachname, @p.Vorname</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    @if (!Model.IstNeu && Model.Form.RaumId == null && Model.Form.PersonId == null)
+                    {
+                        <div style="margin-top:12px;padding:8px 12px;background:#fff4ce;color:#8a6914;font-size:12px;border-left:3px solid #8a6914">
+                            &#9888; Kein Raum und keine Person zugeordnet – Standort unbekannt.
+                        </div>
+                    }
+                </div>
+
+                @* ANSCHAFFUNG *@
+                <div id="panel-anschaffung" class="bc-tab-panel">
+                    <p class="bc-section-title">Anschaffung</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field">
+                            <span class="bc-field-label">Anschaffungsdatum</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.Anschaffungsdatum" type="date" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Anschaffungskosten</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md" style="display:flex;gap:4px;align-items:center">
+                                <input asp-for="Form.Anschaffungskosten" type="number" step="0.01" min="0" class="bc-field-ctrl" style="flex:1" />
+                                <span style="font-size:12px;color:#605e5c">EUR</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* KOMPONENTEN *@
+                <div id="panel-komponenten" class="bc-tab-panel">
+                    <p class="bc-section-title">Komponenten / Zubehör</p>
+                    <div class="bc-table-wrap">
+                        <table class="bc-table" style="width:100%" id="tbl-komponenten">
+                            <thead>
+                                <tr>
+                                    <th style="width:32px">#</th>
+                                    <th>Bezeichnung *</th>
+                                    <th style="width:80px">Menge</th>
+                                    <th style="width:160px">ID / Seriennummer</th>
+                                    <th>Notiz</th>
+                                    <th style="width:36px"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="komp-tbody">
+                                @for (int i = 0; i < Model.Komponenten.Count; i++)
+                                {
+                                    var k = Model.Komponenten[i];
+                                    <tr>
+                                        <input type="hidden" name="KomponentenFormular[@i].KomponenteId" value="@k.KomponenteId" />
+                                        <input type="hidden" name="KomponentenFormular[@i].Reihenfolge" value="@k.Reihenfolge" />
+                                        <td style="color:#605e5c;text-align:center">@(i+1)</td>
+                                        <td><input name="KomponentenFormular[@i].Bezeichnung" value="@k.Bezeichnung" class="bc-field-ctrl" maxlength="200" required style="width:100%" /></td>
+                                        <td><input name="KomponentenFormular[@i].Menge" value="@k.Menge" type="number" step="0.01" min="0" class="bc-field-ctrl" style="width:100%" /></td>
+                                        <td><input name="KomponentenFormular[@i].Seriennummer" value="@k.Seriennummer" class="bc-field-ctrl" maxlength="100" style="width:100%" /></td>
+                                        <td><input name="KomponentenFormular[@i].Notiz" value="@k.Notiz" class="bc-field-ctrl" style="width:100%" /></td>
+                                        <td><button type="button" class="bc-icon-btn-danger" onclick="removeKomp(this)" title="Entfernen">&#10005;</button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top:8px">
+                        <button type="button" class="bc-btn" id="btn-add-komp">+ Komponente</button>
+                    </div>
+                </div>
+
+                @* WARTUNG *@
+                <div id="panel-wartung" class="bc-tab-panel">
+                    <p class="bc-section-title">Wartungsplan</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field">
+                            <span class="bc-field-label">Startdatum</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.WartungStartdatum" type="date" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Intervall (Monate)</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-sm">
+                                <input asp-for="Form.WartungIntervallMonate" type="number" min="1" max="120" class="bc-field-ctrl" placeholder="–" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Letzte Wartung</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.WartungLetztesDatum" type="date" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Nächste Wartung</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                @if (Model.NaechsteWartung.HasValue)
+                                {
+                                    <span style="@WartungStyle(Model.NaechsteWartung);font-size:13px;padding:3px 0;display:block">
+                                        @Model.NaechsteWartung.Value.ToString("dd.MM.yyyy")
+                                        @if (Model.NaechsteWartung.Value < DateOnly.FromDateTime(DateTime.Today))
+                                        {
+                                            <span style="font-size:11px"> (überfällig)</span>
+                                        }
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span style="color:#a19f9d;font-size:13px;padding:3px 0;display:block">– (kein Intervall)</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!Model.IstNeu)
+                    {
+                        <div style="margin-top:20px">
+                            <p class="bc-section-title">Wartungsprotokoll</p>
+
+                            @* Wartung durchführen – Inline-Panel *@
+                            <div style="margin-bottom:12px">
+                                <button type="button" class="bc-btn bc-btn-primary" id="btn-wartung-wizard">
+                                    + Wartung durchführen
+                                </button>
+                            </div>
+
+                            <div id="wartung-wizard" style="display:none;border:1px solid #00B7C3;padding:14px 16px;background:#f9fffe;margin-bottom:16px">
+                                <p class="bc-section-title">Neue Wartung erfassen</p>
+                                <form method="post" asp-page-handler="Wartung">
+                                    <input type="hidden" asp-for="Form.InventarId" />
+                                    <div class="bc-fields-2col" style="max-width:600px">
+                                        <div class="bc-field">
+                                            <span class="bc-field-label">Wartungsdatum</span>
+                                            <span class="bc-field-dots"></span>
+                                            <div class="bc-field-right bc-field-right-md">
+                                                <input name="wartungsDatum" type="date" class="bc-field-ctrl"
+                                                       value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                                            </div>
+                                        </div>
+                                        <div class="bc-field-check">
+                                            <input name="istExtern" type="checkbox" id="chk-istextern" value="true"
+                                                   onchange="toggleBetrieb(this)" />
+                                            <label for="chk-istextern" style="font-size:13px">Extern durchgeführt</label>
+                                        </div>
+                                        <div class="bc-field" id="row-betrieb" style="display:none">
+                                            <span class="bc-field-label">Betrieb / Dienstleister</span>
+                                            <span class="bc-field-dots"></span>
+                                            <div class="bc-field-right bc-field-right-lg">
+                                                <select name="betriebId" class="bc-field-ctrl">
+                                                    <option value="">– bitte wählen –</option>
+                                                    @foreach (var b in Model.BetriebeListeWartung)
+                                                    {
+                                                        <option value="@b.BetriebId">@b.BetriebNr · @b.Name</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="bc-field-block bc-field-full">
+                                            <label class="bc-field-label">Anmerkungen</label>
+                                            <textarea name="anmerkungen" class="bc-field-ctrl" rows="2" style="width:100%;resize:vertical"></textarea>
+                                        </div>
+                                    </div>
+                                    <div style="margin-top:10px;display:flex;gap:8px">
+                                        <button type="submit" class="bc-btn bc-btn-primary">&#10003; Wartung speichern</button>
+                                        <button type="button" class="bc-btn" onclick="document.getElementById('wartung-wizard').style.display='none'">Abbrechen</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <table class="bc-table" style="width:100%;font-size:12px">
+                                <thead>
+                                    <tr>
+                                        <th style="width:90px">Datum</th>
+                                        <th style="width:70px">Art</th>
+                                        <th style="width:150px">Betrieb</th>
+                                        <th>Anmerkungen</th>
+                                        <th style="width:120px">Eingetragen von</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                @foreach (var w in Model.Wartungen)
+                                {
+                                    <tr>
+                                        <td>@w.WartungsDatum.ToString("dd.MM.yyyy")</td>
+                                        <td>
+                                            @if (w.IstExtern)
+                                            {
+                                                <span class="bc-badge" style="background:#fff4ce;color:#8a6914">Extern</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="bc-badge" style="background:#dff6dd;color:#107C10">Intern</span>
+                                            }
+                                        </td>
+                                        <td style="color:#605e5c">@(w.BetriebName ?? "–")</td>
+                                        <td style="color:#605e5c">@(w.Anmerkungen ?? "–")</td>
+                                        <td style="color:#605e5c;font-size:11px">@w.AusfuehrendUser</td>
+                                    </tr>
+                                }
+                                @if (!Model.Wartungen.Any())
+                                {
+                                    <tr><td colspan="5" style="text-align:center;color:#a19f9d;padding:12px">Noch keine Wartungen eingetragen.</td></tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+
+            </form>
+
+            @* PROTOKOLL (outside form) *@
+            @if (!Model.IstNeu)
+            {
+                <div id="panel-protokoll" class="bc-tab-panel">
+                    <p class="bc-section-title">Änderungsprotokoll</p>
+                    <table class="bc-table" style="width:100%;font-size:12px">
+                        <thead>
+                            <tr>
+                                <th style="width:130px">Datum</th>
+                                <th style="width:140px">Ereignis</th>
+                                <th style="width:100px">Feld</th>
+                                <th>Alt &#8594; Neu</th>
+                                <th style="width:140px">Durch</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var p in Model.Protokoll)
+                        {
+                            <tr>
+                                <td style="color:#605e5c">@p.Zeitstempel.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                <td><span class="bc-badge" style="background:#f3f2f1;color:#323130">@p.Ereignis</span></td>
+                                <td style="color:#605e5c">@(p.Feld ?? "–")</td>
+                                <td style="color:#605e5c">
+                                    @if (!string.IsNullOrEmpty(p.AlterWert) || !string.IsNullOrEmpty(p.NeuerWert))
+                                    {
+                                        <span style="color:#c50f1f">@(p.AlterWert ?? "–")</span>
+                                        <span style="color:#605e5c"> &#8594; </span>
+                                        <span style="color:#107C10">@(p.NeuerWert ?? "–")</span>
+                                    }
+                                    else
+                                    {
+                                        <span>–</span>
+                                    }
+                                </td>
+                                <td style="color:#605e5c;font-size:11px">@p.AusfuehrendUser</td>
+                            </tr>
+                        }
+                        @if (!Model.Protokoll.Any())
+                        {
+                            <tr><td colspan="5" style="text-align:center;color:#a19f9d;padding:16px">Kein Protokoll vorhanden.</td></tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+        </div>
+
+        @* SIDEBAR *@
+        @if (!Model.IstNeu)
+        {
+            <div style="flex:0 0 25%;min-width:200px;max-width:300px">
+                <div class="bc-side-container">
+                    <div style="padding:12px">
+                        <p class="bc-section-title">Info</p>
+
+                        <div style="margin-bottom:12px;text-align:center">
+                            <span class="bc-badge" style="@ZustandStyle(Model.Form.Zustand);font-size:14px;padding:6px 14px">
+                                @InventarService.ZustandText(Model.Form.Zustand)
+                            </span>
+                        </div>
+
+                        @if (Model.Form.OrgEinheitId != null)
+                        {
+                            var sbOrg = Model.OrgEinheitenListe.FirstOrDefault(o => o.OrgEinheitId == Model.Form.OrgEinheitId);
+                            if (sbOrg != null)
+                            {
+                                <div style="margin-bottom:8px">
+                                    <span style="font-size:11px;color:#605e5c">Org.Einheit</span><br />
+                                    <span style="font-size:13px">@sbOrg.Code · @sbOrg.Bezeichnung</span>
+                                </div>
+                            }
+                        }
+
+                        @if (Model.Form.RaumId != null)
+                        {
+                            var sbRaum = Model.RaeumeListe.FirstOrDefault(r => r.RaumId == Model.Form.RaumId);
+                            if (sbRaum != null)
+                            {
+                                <div style="margin-bottom:8px">
+                                    <span style="font-size:11px;color:#605e5c">Raum</span><br />
+                                    <a href="/Raeume/Karte/@sbRaum.RaumId" style="font-size:13px;color:#00B7C3">
+                                        @sbRaum.RaumNr · @sbRaum.Bezeichnung
+                                    </a>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div style="margin-bottom:8px">
+                                <span style="font-size:11px;color:#605e5c">Raum</span><br />
+                                <span style="color:#a19f9d;font-size:13px">– nicht zugeordnet –</span>
+                            </div>
+                        }
+
+                        @if (Model.Form.PersonId != null)
+                        {
+                            var sbPerson = Model.PersonenListe.FirstOrDefault(p => p.PersonId == Model.Form.PersonId);
+                            if (sbPerson != null)
+                            {
+                                <div style="margin-bottom:8px">
+                                    <span style="font-size:11px;color:#605e5c">Person</span><br />
+                                    <span style="font-size:13px">@sbPerson.Nachname, @sbPerson.Vorname</span>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div style="margin-bottom:8px">
+                                <span style="font-size:11px;color:#605e5c">Person</span><br />
+                                <span style="color:#a19f9d;font-size:13px">– nicht zugeordnet –</span>
+                            </div>
+                        }
+
+                        @if (Model.NaechsteWartung.HasValue)
+                        {
+                            <div style="margin-bottom:8px">
+                                <span style="font-size:11px;color:#605e5c">Nächste Wartung</span><br />
+                                <strong style="@WartungStyle(Model.NaechsteWartung)">@Model.NaechsteWartung.Value.ToString("dd.MM.yyyy")</strong>
+                            </div>
+                        }
+
+                        @if (Model.Komponenten.Count > 0)
+                        {
+                            <div style="margin-bottom:8px">
+                                <span style="font-size:11px;color:#605e5c">Komponenten</span><br />
+                                <span style="font-size:13px">@Model.Komponenten.Count Eintrag/Einträge</span>
+                            </div>
+                        }
+
+                        @if (Model.Form.Anschaffungskosten.HasValue)
+                        {
+                            <div style="margin-bottom:8px">
+                                <span style="font-size:11px;color:#605e5c">Anschaffungskosten</span><br />
+                                <strong>@Model.Form.Anschaffungskosten.Value.ToString("N2") EUR</strong>
+                            </div>
+                        }
+
+                        @if (Model.Form.Gesperrt && !string.IsNullOrEmpty(Model.Form.SperrGrund))
+                        {
+                            <div style="margin-top:12px;padding:8px;background:#fde7e9;border-radius:2px;font-size:12px;color:#c50f1f">
+                                <strong>Gesperrt:</strong> @Model.Form.SperrGrund
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* ANHÄNGE *@
+                <div class="bc-side-container" style="margin-top:12px">
+                    <div style="padding:12px">
+                        <p class="bc-section-title">Anhänge (@Model.Anhaenge.Count)</p>
+
+                        @foreach (var a in Model.Anhaenge)
+                        {
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:12px">
+                                <div style="flex:1;min-width:0;overflow:hidden">
+                                    <a href="?id=@Model.Form.InventarId&handler=Anhang&anhangId=@a.AnhangId"
+                                       style="color:#00B7C3;word-break:break-all" title="@a.DateiName">
+                                        @a.Bezeichnung
+                                    </a><br />
+                                    <span style="color:#a19f9d;font-size:11px">@FormatBytes(a.DateiGroesse) · @a.HochgeladenAm.ToLocalTime().ToString("dd.MM.yy HH:mm")</span>
+                                </div>
+                                <form method="post" asp-page-handler="AnhangLoeschen" style="margin-left:6px;flex-shrink:0"
+                                      onsubmit="return confirm('Anhang löschen?')">
+                                    <input type="hidden" name="anhangId" value="@a.AnhangId" />
+                                    <input type="hidden" name="inventarId" value="@Model.Form.InventarId" />
+                                    <button type="submit" class="bc-icon-btn-danger" style="width:20px;height:20px;font-size:10px" title="Löschen">&#10005;</button>
+                                </form>
+                            </div>
+                        }
+                        @if (!Model.Anhaenge.Any())
+                        {
+                            <div style="color:#a19f9d;font-size:12px;margin-bottom:8px">Keine Anhänge.</div>
+                        }
+
+                        <form method="post" asp-page-handler="AnhangUpload" enctype="multipart/form-data" style="margin-top:8px">
+                            <input type="hidden" name="inventarId" value="@Model.Form.InventarId" />
+                            <div style="margin-bottom:4px">
+                                <input type="text" name="bezeichnung" class="bc-field-ctrl" placeholder="Bezeichnung (optional)" style="width:100%;font-size:12px" maxlength="200" />
+                            </div>
+                            <div style="display:flex;gap:6px;align-items:center">
+                                <input type="file" name="datei" class="bc-field-ctrl" style="flex:1;font-size:11px;padding:2px" />
+                                <button type="submit" class="bc-btn" style="font-size:12px;padding:2px 8px;white-space:nowrap">&#8679; Upload</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function() {
+    // Tab switching
+    var tabs   = document.querySelectorAll('.bc-action-tab');
+    var panels = document.querySelectorAll('.bc-tab-panel');
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            tabs.forEach(t => t.classList.remove('active'));
+            panels.forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            var p = document.getElementById(tab.dataset.panel);
+            if (p) p.classList.add('active');
+        });
+    });
+
+    // Zustand badge preview
+    var zustandStyles = {
+        '0': 'background:#dff6dd;color:#107C10',
+        '1': 'background:#fff4ce;color:#8a6914',
+        '2': 'background:#fde7e9;color:#c50f1f',
+        '3': 'background:#f3f2f1;color:#605e5c'
+    };
+    var zustandLabels = { '0': 'Gut', '1': 'Beschädigt', '2': 'Defekt', '3': 'Ausgemustert' };
+
+    window.updateZustandBadge = function() {
+        var sel   = document.getElementById('sel-zustand');
+        var badge = document.getElementById('zustand-badge');
+        if (!sel || !badge) return;
+        var v = sel.value;
+        badge.style.cssText = zustandStyles[v] || '';
+        badge.textContent   = zustandLabels[v] || '';
+    };
+    updateZustandBadge();
+
+    // Wartungs-Wizard toggle
+    var btnWizard = document.getElementById('btn-wartung-wizard');
+    var wizard    = document.getElementById('wartung-wizard');
+    if (btnWizard && wizard) {
+        btnWizard.addEventListener('click', function() {
+            wizard.style.display = wizard.style.display === 'none' ? '' : 'none';
+        });
+    }
+
+    // Betrieb-Dropdown bei extern
+    window.toggleBetrieb = function(chk) {
+        var row = document.getElementById('row-betrieb');
+        if (row) row.style.display = chk.checked ? '' : 'none';
+    };
+
+    // Komponenten hinzufügen
+    var kompRowCount = @Model.Komponenten.Count;
+    var btnAddKomp = document.getElementById('btn-add-komp');
+    if (btnAddKomp) {
+        btnAddKomp.addEventListener('click', function() {
+            var i = kompRowCount++;
+            var tbody = document.getElementById('komp-tbody');
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+                '<input type="hidden" name="KomponentenFormular[' + i + '].KomponenteId" value="0" />' +
+                '<input type="hidden" name="KomponentenFormular[' + i + '].Reihenfolge" value="' + i + '" />' +
+                '<td style="color:#605e5c;text-align:center">' + (i+1) + '</td>' +
+                '<td><input name="KomponentenFormular[' + i + '].Bezeichnung" class="bc-field-ctrl" maxlength="200" required style="width:100%" placeholder="Bezeichnung" /></td>' +
+                '<td><input name="KomponentenFormular[' + i + '].Menge" type="number" step="0.01" min="0" value="1" class="bc-field-ctrl" style="width:100%" /></td>' +
+                '<td><input name="KomponentenFormular[' + i + '].Seriennummer" class="bc-field-ctrl" maxlength="100" style="width:100%" /></td>' +
+                '<td><input name="KomponentenFormular[' + i + '].Notiz" class="bc-field-ctrl" style="width:100%" /></td>' +
+                '<td><button type="button" class="bc-icon-btn-danger" onclick="removeKomp(this)" title="Entfernen">&#10005;</button></td>';
+            tbody.appendChild(tr);
+            tr.querySelector('input[name$=".Bezeichnung"]').focus();
+        });
+    }
+
+    window.removeKomp = function(btn) {
+        btn.closest('tr').remove();
+    };
+})();
+</script>
+}

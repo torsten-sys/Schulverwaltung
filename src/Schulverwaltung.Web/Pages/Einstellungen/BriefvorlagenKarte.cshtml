@@ -1,0 +1,274 @@
+@page
+@model Schulverwaltung.Web.Pages.Einstellungen.BriefvorlagenKarteModel
+@{ ViewData["Title"] = Model.IstNeu ? "Neue Briefvorlage" : "Briefvorlage"; }
+
+<div class="bc-page">
+
+    @* ── Topbar ── *@
+    <div class="bc-card-topbar">
+        <a href="/Einstellungen/Briefvorlagen" class="bc-back-btn" title="Zurück">&#8592;</a>
+        <span class="bc-page-badge">BRIEFVORLAGE</span>
+        <div style="flex:1"></div>
+        <button class="bc-icon-btn" form="form-speichern" type="submit" title="Speichern (✔)">&#10004;</button>
+        @if (!Model.IstNeu)
+        {
+            <form method="post" asp-page-handler="Loeschen" style="display:inline"
+                  onsubmit="return confirm('Vorlage wirklich löschen?')">
+                <input type="hidden" name="id" value="@Model.Form.BriefvorlageId" />
+                <button type="submit" class="bc-icon-btn-danger" title="Löschen">&#128465;</button>
+            </form>
+        }
+    </div>
+
+    @* ── Titel ── *@
+    <h1 class="bc-card-title">
+        @if (Model.IstNeu)
+        {
+            <span class="bc-title-nr">Neu</span>
+            <span class="bc-title-sep">·</span>
+            <span>Briefvorlage</span>
+        }
+        else
+        {
+            <span class="bc-title-nr">@Model.Form.BriefvorlageId</span>
+            <span class="bc-title-sep">·</span>
+            <span>@Model.Form.Bezeichnung</span>
+            @if (Model.Form.IstStandard)
+            {
+                <span class="bc-title-status bc-badge" style="background:#dff6dd;color:#107C10">Standard</span>
+            }
+            @if (Model.Form.Gesperrt)
+            {
+                <span class="bc-title-status bc-badge bc-badge-gesperrt">Gesperrt</span>
+            }
+        }
+    </h1>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert bc-alert-danger">@Model.Fehler</div>
+    }
+
+    <form id="form-speichern" method="post" asp-page-handler="Speichern">
+        <input type="hidden" name="Form.BriefvorlageId" value="@Model.Form.BriefvorlageId" />
+
+        @* ── Stammdaten ── *@
+        <div class="bc-section-title">ALLGEMEIN</div>
+        <div class="bc-fields-2col" style="max-width:700px">
+            <div class="bc-field">
+                <span class="bc-field-label req">Bezeichnung</span>
+                <span class="bc-field-dots"></span>
+                <div class="bc-field-right">
+                    <input name="Form.Bezeichnung" value="@Model.Form.Bezeichnung"
+                           class="bc-field-ctrl" maxlength="100" required />
+                </div>
+            </div>
+            <div class="bc-field-check">
+                <input id="chk-standard" name="Form.IstStandard" type="checkbox" value="true"
+                       @(Model.Form.IstStandard ? "checked" : "") />
+                <label for="chk-standard">Als Standard verwenden</label>
+            </div>
+            <div class="bc-field-check">
+                <input id="chk-gesperrt" name="Form.Gesperrt" type="checkbox" value="true"
+                       @(Model.Form.Gesperrt ? "checked" : "") />
+                <label for="chk-gesperrt">Gesperrt</label>
+            </div>
+        </div>
+
+        @* ── HTML-Editoren ── *@
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px">
+            <div>
+                <div class="bc-section-title">BRIEFKOPF (HTML)</div>
+                <textarea id="ta-kopf" name="Form.KopfHtml" rows="12" class="bc-field-ctrl"
+                          style="width:100%;font-family:monospace;font-size:12px;resize:vertical">@Model.Form.KopfHtml</textarea>
+                <div class="bc-section-title" style="margin-top:10px">VORSCHAU BRIEFKOPF</div>
+                <div id="prev-kopf" style="border:1px solid #e0e0e0;padding:10px;min-height:50px;font-size:13px;background:#fafafa"></div>
+            </div>
+            <div>
+                <div class="bc-section-title">BRIEFFUSS (HTML)</div>
+                <textarea id="ta-fuss" name="Form.FussHtml" rows="12" class="bc-field-ctrl"
+                          style="width:100%;font-family:monospace;font-size:12px;resize:vertical">@Model.Form.FussHtml</textarea>
+                <div class="bc-section-title" style="margin-top:10px">VORSCHAU BRIEFFUSS</div>
+                <div id="prev-fuss" style="border:1px solid #e0e0e0;padding:10px;min-height:50px;font-size:13px;background:#fafafa"></div>
+            </div>
+        </div>
+    </form>
+
+    @* ── Bildverwaltung ── *@
+    <div style="margin-top:28px">
+        <div class="bc-section-title">BILDER &amp; LOGOS</div>
+        <p style="font-size:12px;color:#605e5c;margin:0 0 10px">
+            Bilder hochladen und per Klick in den Briefkopf oder Brieffuß einfügen.
+            Erlaubt: PNG, JPG, GIF, SVG, WebP · max. 3 MB
+        </p>
+
+        @* Upload *@
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+            <label class="bc-btn" style="cursor:pointer;margin:0">
+                + Bild hochladen
+                <input type="file" id="bild-input" accept=".png,.jpg,.jpeg,.gif,.svg,.webp"
+                       style="display:none" onchange="bildHochladen(this)">
+            </label>
+            <span id="upload-status" style="font-size:12px;color:#605e5c"></span>
+        </div>
+
+        @* Galerie *@
+        <div id="bilder-galerie" style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start">
+            @foreach (var bild in Model.Bilder)
+            {
+                var kb = (bild.Groesse / 1024.0).ToString("F0");
+                <div class="bc-bild-karte" data-url="@bild.Url" data-dateiname="@bild.Dateiname">
+                    <div style="border:1px solid #e0e0e0;background:#fff;padding:6px;min-height:70px;display:flex;align-items:center;justify-content:center">
+                        <img src="@bild.Url" style="max-height:64px;max-width:140px;display:block">
+                    </div>
+                    <div style="font-size:10px;color:#605e5c;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px"
+                         title="@bild.Dateiname">@bild.Anzeigename</div>
+                    <div style="font-size:10px;color:#a19f9d;margin-bottom:4px">@kb KB</div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap">
+                        <button type="button" class="bc-btn bc-btn-sm"
+                                onclick="einfuegenIn('ta-kopf', this.closest('.bc-bild-karte').dataset.url)"
+                                title="In Briefkopf einfügen">↑ Briefkopf</button>
+                        <button type="button" class="bc-btn bc-btn-sm"
+                                onclick="einfuegenIn('ta-fuss', this.closest('.bc-bild-karte').dataset.url)"
+                                title="In Brieffuß einfügen">↓ Brieffuß</button>
+                        <button type="button" class="bc-icon-btn-danger"
+                                style="width:26px;height:26px;font-size:12px;flex-shrink:0"
+                                onclick="bildLoeschen(this)"
+                                title="Bild löschen">&#128465;</button>
+                    </div>
+                </div>
+            }
+            @if (!Model.Bilder.Any())
+            {
+                <p id="bilder-leer" style="color:#a19f9d;font-size:12px;padding:8px 0">
+                    Noch keine Bilder hochgeladen.
+                </p>
+            }
+        </div>
+    </div>
+
+    <p style="font-size:11px;color:#a19f9d;margin-top:16px">
+        Tipp: Das &lt;img&gt;-Tag wird mit <code>style="max-width:100%"</code> eingefügt. Größe und Ausrichtung
+        können im HTML direkt angepasst werden.
+    </p>
+
+</div>
+
+@section Scripts {
+<script>
+(function () {
+
+    // ── Live-Vorschau ────────────────────────────────────────────────────────
+    var taKopf   = document.getElementById('ta-kopf');
+    var taFuss   = document.getElementById('ta-fuss');
+    var prevKopf = document.getElementById('prev-kopf');
+    var prevFuss = document.getElementById('prev-fuss');
+
+    function updatePreview() {
+        prevKopf.innerHTML = taKopf.value;
+        prevFuss.innerHTML = taFuss.value;
+    }
+    taKopf.addEventListener('input', updatePreview);
+    taFuss.addEventListener('input', updatePreview);
+    updatePreview();
+
+    // ── Bild an Cursor-Position einfügen ─────────────────────────────────────
+    window.einfuegenIn = function (textareaId, imgUrl) {
+        var ta  = document.getElementById(textareaId);
+        var tag = '<img src="' + imgUrl + '" style="max-width:100%" />';
+        var s   = ta.selectionStart;
+        ta.value = ta.value.substring(0, s) + tag + ta.value.substring(ta.selectionEnd);
+        ta.selectionStart = ta.selectionEnd = s + tag.length;
+        ta.dispatchEvent(new Event('input'));
+        ta.focus();
+        // Scrollen zum Textarea
+        ta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+
+    // ── Bild hochladen (AJAX) ────────────────────────────────────────────────
+    window.bildHochladen = async function (input) {
+        if (!input.files || !input.files[0]) return;
+        var statusEl = document.getElementById('upload-status');
+        statusEl.style.color = '#605e5c';
+        statusEl.textContent = 'Wird hochgeladen…';
+
+        var token = document.querySelector('[name="__RequestVerificationToken"]').value;
+        var fd    = new FormData();
+        fd.append('datei', input.files[0]);
+        fd.append('__RequestVerificationToken', token);
+
+        try {
+            var r    = await fetch('?handler=BildHochladen', { method: 'POST', body: fd });
+            var data = await r.json();
+            if (data.fehler) {
+                statusEl.style.color = '#c50f1f';
+                statusEl.textContent = '⚠ ' + data.fehler;
+                return;
+            }
+            statusEl.style.color = '#107C10';
+            statusEl.textContent = '✓ ' + data.anzeigename + ' hochgeladen';
+            setTimeout(function () { statusEl.textContent = ''; }, 3000);
+
+            // Leer-Hinweis ausblenden
+            var leerEl = document.getElementById('bilder-leer');
+            if (leerEl) leerEl.remove();
+
+            bildKarteHinzufuegen(data.url, data.dateiname, data.anzeigename, data.groesseKb);
+            input.value = '';
+        } catch (e) {
+            statusEl.style.color = '#c50f1f';
+            statusEl.textContent = '⚠ Verbindungsfehler beim Hochladen';
+        }
+    };
+
+    function bildKarteHinzufuegen(url, dateiname, anzeigename, groesseKb) {
+        var galerie = document.getElementById('bilder-galerie');
+        var div = document.createElement('div');
+        div.className = 'bc-bild-karte';
+        div.dataset.url      = url;
+        div.dataset.dateiname = dateiname;
+        div.innerHTML =
+            '<div style="border:1px solid #e0e0e0;background:#fff;padding:6px;min-height:70px;display:flex;align-items:center;justify-content:center">' +
+                '<img src="' + url + '" style="max-height:64px;max-width:140px;display:block">' +
+            '</div>' +
+            '<div style="font-size:10px;color:#605e5c;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px" title="' + dateiname + '">' + anzeigename + '</div>' +
+            '<div style="font-size:10px;color:#a19f9d;margin-bottom:4px">' + groesseKb + ' KB</div>' +
+            '<div style="display:flex;gap:4px;flex-wrap:wrap">' +
+                '<button type="button" class="bc-btn bc-btn-sm" onclick="einfuegenIn(\'ta-kopf\', this.closest(\'.bc-bild-karte\').dataset.url)" title="In Briefkopf einfügen">↑ Briefkopf</button>' +
+                '<button type="button" class="bc-btn bc-btn-sm" onclick="einfuegenIn(\'ta-fuss\', this.closest(\'.bc-bild-karte\').dataset.url)" title="In Brieffuß einfügen">↓ Brieffuß</button>' +
+                '<button type="button" class="bc-icon-btn-danger" style="width:26px;height:26px;font-size:12px;flex-shrink:0" onclick="bildLoeschen(this)" title="Bild löschen">&#128465;</button>' +
+            '</div>';
+        galerie.insertBefore(div, galerie.firstChild);
+    }
+
+    // ── Bild löschen (AJAX) ──────────────────────────────────────────────────
+    window.bildLoeschen = async function (btn) {
+        var karte = btn.closest('.bc-bild-karte');
+        if (!karte) return;
+        if (!confirm('Bild "' + karte.dataset.dateiname + '" wirklich löschen?\n\nHinweis: Bereits eingefügte <img>-Tags bleiben erhalten.')) return;
+
+        var token = document.querySelector('[name="__RequestVerificationToken"]').value;
+        var fd    = new FormData();
+        fd.append('dateiname', karte.dataset.dateiname);
+        fd.append('__RequestVerificationToken', token);
+
+        try {
+            var r    = await fetch('?handler=BildLoeschen', { method: 'POST', body: fd });
+            var data = await r.json();
+            if (data.fehler) { alert(data.fehler); return; }
+            karte.remove();
+            if (!document.querySelector('#bilder-galerie .bc-bild-karte')) {
+                var p = document.createElement('p');
+                p.id        = 'bilder-leer';
+                p.style.cssText = 'color:#a19f9d;font-size:12px;padding:8px 0';
+                p.textContent   = 'Noch keine Bilder hochgeladen.';
+                document.getElementById('bilder-galerie').appendChild(p);
+            }
+        } catch (e) {
+            alert('Verbindungsfehler beim Löschen.');
+        }
+    };
+
+})();
+</script>
+}

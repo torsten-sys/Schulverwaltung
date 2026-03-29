@@ -1,0 +1,154 @@
+@page
+@model Schulverwaltung.Web.Pages.Lehrgaenge.MeisterFaecherModel
+@{ ViewData["Title"] = "Fächer – " + (Model.Lehrgang?.Bezeichnung ?? ""); }
+
+<div class="bc-page">
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Lehrgaenge/Karte?id=@Model.LehrgangId" class="bc-back-btn" title="Zurück">&#8592;</a>
+            <span class="bc-page-badge">FÄCHER</span>
+        </div>
+        <div style="display:flex;gap:6px">
+            <button type="submit" form="form-faecher" class="bc-btn bc-btn-primary">Speichern</button>
+            <a href="/Lehrgaenge/Karte?id=@Model.LehrgangId" class="bc-btn">Abbrechen</a>
+        </div>
+    </div>
+
+    <h1 class="bc-card-title">
+        <span class="bc-title-nr">@(Model.Lehrgang?.LehrgangNr ?? "")</span>
+        <span class="bc-title-sep">·</span>
+        <span>@(Model.Lehrgang?.Bezeichnung ?? "") › Fächer</span>
+    </h1>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+    @if (!string.IsNullOrEmpty(Model.Erfolg))
+    {
+        <div class="bc-alert bc-alert-success">@Model.Erfolg</div>
+    }
+
+    <form id="form-faecher" method="post" asp-page-handler="Speichern">
+        <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+
+        <table class="bc-table" style="width:90%" id="faecher-table">
+            <thead>
+                <tr>
+                    <th style="width:40px;text-align:center">Nr.</th>
+                    <th>Bezeichnung</th>
+                    <th style="width:110px;text-align:right">Gewichtung</th>
+                    <th style="width:80px;text-align:center">Reihenf.</th>
+                    <th style="width:130px"></th>
+                </tr>
+            </thead>
+            <tbody id="faecher-body">
+                @for (int i = 0; i < Model.Faecher.Count; i++)
+                {
+                    var f = Model.Faecher[i];
+                    <tr data-idx="@i">
+                        <td style="text-align:center;color:#605e5c;font-size:12px">@(i + 1)</td>
+                        <td>
+                            <input type="hidden" name="fachIds" value="@f.FachId" />
+                            <input type="hidden" name="reihenfolgen" value="@f.Reihenfolge" />
+                            <input name="bezeichnungen" value="@f.Bezeichnung" class="bc-field-ctrl" style="width:100%" />
+                        </td>
+                        <td>
+                            <input name="gewichtungen" type="number" step="0.25" min="0.25"
+                                   value="@f.Gewichtung.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
+                                   class="bc-field-ctrl" style="width:90px;text-align:right" />
+                        </td>
+                        <td style="text-align:center;white-space:nowrap">
+                            @if (!f.IstErste)
+                            {
+                                <form method="post" asp-page-handler="Verschieben" style="display:inline">
+                                    <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+                                    <input type="hidden" name="fachId" value="@f.FachId" />
+                                    <input type="hidden" name="richtung" value="hoch" />
+                                    <button type="submit" class="bc-btn bc-btn-sm" title="Nach oben">&#8593;</button>
+                                </form>
+                            }
+                            @if (!f.IstLetzte)
+                            {
+                                <form method="post" asp-page-handler="Verschieben" style="display:inline">
+                                    <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+                                    <input type="hidden" name="fachId" value="@f.FachId" />
+                                    <input type="hidden" name="richtung" value="runter" />
+                                    <button type="submit" class="bc-btn bc-btn-sm" title="Nach unten">&#8595;</button>
+                                </form>
+                            }
+                        </td>
+                        <td>
+                            @if (!f.HatBenoteteNoten)
+                            {
+                                <form method="post" asp-page-handler="Loeschen" style="display:inline"
+                                      onsubmit="return confirm('Fach wirklich löschen?')">
+                                    <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+                                    <input type="hidden" name="fachId" value="@f.FachId" />
+                                    <button type="submit" class="bc-btn-remove bc-icon-btn-danger" title="Löschen">&#x2715;</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span style="font-size:11px;color:#a19f9d" title="Hat Noten">&#128274;</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr id="neu-zeile" style="display:none">
+                    <td style="text-align:center;color:#605e5c;font-size:12px" id="neu-nr">–</td>
+                    <td>
+                        <input type="hidden" name="fachIds" id="neu-fachId" value="0" />
+                        <input type="hidden" name="reihenfolgen" id="neu-reihenfolge" value="9999" />
+                        <input name="bezeichnungen" id="neu-bezeichnung" class="bc-field-ctrl" style="width:100%" placeholder="Neue Bezeichnung..." />
+                    </td>
+                    <td>
+                        <input name="gewichtungen" id="neu-gewichtung" type="number" step="0.25" min="0.25" value="1.00"
+                               class="bc-field-ctrl" style="width:90px;text-align:right" />
+                    </td>
+                    <td></td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <div style="margin-top:12px;display:flex;align-items:center;gap:16px">
+            <button type="button" class="bc-btn" onclick="neueZeileAnzeigen()">+ Neues Fach</button>
+            <span style="font-size:12px;color:#605e5c">
+                Summe Gewichtungen: <strong id="summe-gewichtung">@Model.Faecher.Sum(f => f.Gewichtung).ToString("0.00")</strong>
+            </span>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+<script>
+function neueZeileAnzeigen() {
+    var zeile = document.getElementById('neu-zeile');
+    zeile.style.display = '';
+    var rows = document.querySelectorAll('#faecher-body tr');
+    document.getElementById('neu-nr').textContent = rows.length + 1;
+    document.getElementById('neu-reihenfolge').value = rows.length + 1;
+    document.getElementById('neu-bezeichnung').focus();
+}
+
+// Live-Summe der Gewichtungen
+document.addEventListener('input', function(e) {
+    if (e.target.name === 'gewichtungen') {
+        aktualisiereSumme();
+    }
+});
+
+function aktualisiereSumme() {
+    var inputs = document.querySelectorAll('input[name="gewichtungen"]');
+    var summe = 0;
+    inputs.forEach(function(inp) {
+        var v = parseFloat(inp.value);
+        if (!isNaN(v)) summe += v;
+    });
+    document.getElementById('summe-gewichtung').textContent = summe.toFixed(2).replace('.', ',');
+}
+</script>
+}

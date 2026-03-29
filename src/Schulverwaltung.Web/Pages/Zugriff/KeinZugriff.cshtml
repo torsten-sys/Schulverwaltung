@@ -1,0 +1,32 @@
+@page
+@model Schulverwaltung.Web.Pages.Zugriff.KeinZugriffModel
+@{ Layout = null; ViewData["Title"] = "Kein Zugriff"; }
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8" />
+    <title>Kein Zugriff – BfO Schulverwaltung</title>
+    <link rel="stylesheet" href="~/css/schulverwaltung.css" />
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background:#f3f2f1; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
+        .box { background:#fff; border:1px solid #edebe9; padding:48px 56px; max-width:520px; text-align:center; }
+        h1 { font-size:22px; color:#8a6914; margin:0 0 16px; }
+        p { font-size:14px; color:#323130; margin:0 0 12px; }
+        .user { font-size:12px; color:#605e5c; margin:16px 0; padding:8px 16px; background:#fff4ce; border:1px solid #f3d6a4; }
+        a { display:inline-block; margin-top:20px; padding:6px 16px; background:#1F3864; color:#fff; text-decoration:none; font-size:13px; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <div style="font-size:48px;margin-bottom:16px">&#9888;</div>
+        <h1>Kein Zugriff</h1>
+        <p>Sie haben keine Berechtigung für diesen Bereich.</p>
+        <div class="user">
+            <strong>@Model.DisplayName</strong><br />
+            Ihre aktuelle Rolle: <strong>@Model.RolleText</strong>
+        </div>
+        <p style="font-size:12px;color:#605e5c">Wenden Sie sich an einen Administrator.</p>
+        <a href="/">&#8592; Zurück zur Startseite</a>
+    </div>
+</body>
+</html>

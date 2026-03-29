@@ -1,0 +1,65 @@
+@page
+@model Schulverwaltung.Web.Pages.Einstellungen.BriefvorlagenModel
+@{ ViewData["Title"] = "Briefvorlagen"; }
+
+<div class="bc-page">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <h1 class="bc-page-title" style="margin:0">Briefvorlagen</h1>
+        @if (Model.DarfBearbeiten)
+        {
+            <a asp-page="/Einstellungen/BriefvorlagenKarte" class="bc-btn bc-btn-primary">+ Neue Vorlage</a>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.Meldung))
+    {
+        <div class="bc-alert bc-alert-success">@Model.Meldung</div>
+    }
+
+    <div class="bc-table-wrap">
+        <table class="bc-table" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Bezeichnung</th>
+                    <th style="width:110px;text-align:center">Standard</th>
+                    <th style="width:90px;text-align:center">Gesperrt</th>
+                    <th style="width:80px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var v in Model.Vorlagen)
+                {
+                    <tr class="@(v.Gesperrt ? "bc-row-gesperrt" : "")">
+                        <td>
+                            @v.Bezeichnung
+                            @if (v.IstStandard)
+                            {
+                                <span class="bc-badge" style="background:#dff6dd;color:#107C10;margin-left:6px;font-size:10px">Standard</span>
+                            }
+                        </td>
+                        <td style="text-align:center">
+                            @if (v.IstStandard) { <span style="color:#107C10">&#10003;</span> } else { <span style="color:#a19f9d">–</span> }
+                        </td>
+                        <td style="text-align:center">
+                            @if (v.Gesperrt)
+                            {
+                                <span style="color:#c50f1f;font-size:11px;font-weight:600">Gesperrt</span>
+                            }
+                            else
+                            {
+                                <span style="color:#a19f9d">–</span>
+                            }
+                        </td>
+                        <td style="text-align:right">
+                            <a asp-page="/Einstellungen/BriefvorlagenKarte" asp-route-id="@v.BriefvorlageId" class="bc-btn bc-btn-sm">Bearbeiten</a>
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Vorlagen.Any())
+                {
+                    <tr><td colspan="4" style="text-align:center;color:#a19f9d;padding:16px">Keine Briefvorlagen vorhanden</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

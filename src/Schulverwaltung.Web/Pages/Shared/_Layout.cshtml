@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] – BfO Schulverwaltung</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/schulverwaltung.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/Schulverwaltung.Web.styles.css" asp-append-version="true" />
+</head>
+<body>
+    <header>
+        <nav class="navbar navbar-expand-md bc-navbar">
+            <div class="container-fluid px-2">
+                <a class="navbar-brand" asp-area="" asp-page="/Index">BfO Schulverwaltung</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#navbarMain" aria-controls="navbarMain"
+                        aria-expanded="false" aria-label="Navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarMain">
+                    @{
+                        var _benutzer = Context.Items["AppBenutzer"] as Schulverwaltung.Domain.Entities.AppBenutzer;
+                        var _darfInventar = _benutzer != null &&
+                            (_benutzer.AppRolle == 3 ||
+                             (_benutzer.AppRolle >= 1 && _benutzer.DarfInventarVerwalten));
+                    }
+                    <ul class="navbar-nav">
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button"
+                               data-bs-toggle="dropdown" aria-expanded="false">Lehrgänge</a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" asp-page="/Lehrgaenge/Index">Liste</a></li>
+                                <li><a class="dropdown-item" asp-page="/Lehrgaenge/Karte">Neu</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button"
+                               data-bs-toggle="dropdown" aria-expanded="false">Personen</a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" asp-page="/Personen/Index">Liste</a></li>
+                                <li><a class="dropdown-item" asp-page="/Personen/Karte">Neu</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button"
+                               data-bs-toggle="dropdown" aria-expanded="false">Betriebe</a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" asp-page="/Betriebe/Index">Liste</a></li>
+                                <li><a class="dropdown-item" asp-page="/Betriebe/Karte">Neu</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button"
+                               data-bs-toggle="dropdown" aria-expanded="false">Organisationen</a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" asp-page="/Organisationen/Index">Alle</a></li>
+                                <li><a class="dropdown-item" asp-page="/Organisationen/Index" asp-route-typ="0">Innungen</a></li>
+                                <li><a class="dropdown-item" asp-page="/Organisationen/Index" asp-route-typ="1">Handwerkskammern</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" asp-page="/Organisationen/Karte">Neu</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button"
+                               data-bs-toggle="dropdown" aria-expanded="false">Internat</a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" asp-page="/Internat/Index">Belegungsplan</a></li>
+                                <li><a class="dropdown-item" asp-page="/Internat/Zimmer">Zimmer</a></li>
+                            </ul>
+                        </li>
+                        @if (_darfInventar)
+                        {
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button"
+                               data-bs-toggle="dropdown" aria-expanded="false">Inventar</a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" asp-page="/Inventar/Index">Inventargegenstände</a></li>
+                                <li><a class="dropdown-item" asp-page="/Raeume/Index">Räume</a></li>
+                            </ul>
+                        </li>
+                        }
+                        @if (_benutzer?.AppRolle >= 3)
+                        {
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button"
+                               data-bs-toggle="dropdown" aria-expanded="false">Einstellungen</a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" asp-page="/Einstellungen/LehrgangArten">Lehrgangsarten</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" asp-page="/Einstellungen/Briefvorlagen">Briefvorlagen</a></li>
+                                <li><a class="dropdown-item" asp-page="/Einstellungen/EinladungsVorlage">Einladungsvorlage</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" asp-page="/Einstellungen/RaumTypen">Raumtypen</a></li>
+                                <li><a class="dropdown-item" asp-page="/Einstellungen/InventarKategorien">Inventarkategorien</a></li>
+                                <li><a class="dropdown-item" asp-page="/Einstellungen/Organisationseinheiten">Organisationseinheiten</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-page="/Benutzer/Index">Benutzerverwaltung</a>
+                        </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <div class="bc-body">
+        <main role="main">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted">
+        <div class="container">
+            &copy; 2026 BfO Schulverwaltung
+        </div>
+    </footer>
+
+    <div class="bc-modal-backdrop" id="bc-modal">
+        <div class="bc-modal-panel">
+            <button class="bc-modal-nav bc-modal-nav-prev bc-hidden" id="bc-modal-prev" onclick="navigateModal(-1)" title="Vorheriger Datensatz (←)">&#8249;</button>
+            <iframe class="bc-modal-iframe" id="bc-modal-frame" src="about:blank"></iframe>
+            <button class="bc-modal-nav bc-modal-nav-next bc-hidden" id="bc-modal-next" onclick="navigateModal(1)" title="Nächster Datensatz (→)">&#8250;</button>
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+
+    <script>
+    (function() {
+        var path = window.location.pathname;
+        var modalSeiten = ['/Karte', '/Kursmodule', '/FaecherNoten', '/MeisterFunktionen',
+                           '/MeisterInternat', '/Aenderungsprotokoll', '/MeisterPatientenversorgung',
+                           '/MeisterEinladungen', '/MeisterEinladung', '/MeisterEinladungDruck'];
+        var istModalSeite = modalSeiten.some(function(s) { return path.indexOf(s) !== -1; });
+
+        if (window.self !== window.top && !istModalSeite) {
+            window.parent.postMessage({ type: 'modalClose', refresh: true }, '*');
+        }
+        if (window.self !== window.top && path.indexOf('/Karte') !== -1) {
+            document.addEventListener('DOMContentLoaded', function() {
+                var btn = document.querySelector('.bc-back-btn');
+                if (btn) btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    window.parent.postMessage({ type: 'modalClose', refresh: true }, '*');
+                });
+            });
+        }
+    })();
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

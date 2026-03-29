@@ -1,0 +1,100 @@
+@page
+@model Schulverwaltung.Web.Pages.Lehrgaenge.MeisterEinladungModel
+@{ ViewData["Title"] = "Einladung"; }
+
+<div class="bc-page">
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Lehrgaenge/MeisterEinladungen?id=@Model.LehrgangId" class="bc-back-btn">&#x2190;</a>
+            <span class="bc-page-badge">Einladung | @Model.LehrgangNr</span>
+        </div>
+        <div class="bc-card-topbar-right">
+            <button type="button" onclick="window.print()" class="bc-btn bc-btn-sm" title="Drucken">&#x1F5A8; Drucken</button>
+            @if (Model.EinladStatus == 0)
+            {
+                <form method="post" asp-page-handler="Status" style="display:inline">
+                    <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+                    <input type="hidden" name="personId"   value="@Model.PersonId" />
+                    <input type="hidden" name="status"     value="1" />
+                    <button type="submit" class="bc-btn bc-btn-sm bc-btn-primary">&#x2714; Als Fertig markieren</button>
+                </form>
+            }
+            else
+            {
+                <form method="post" asp-page-handler="Status" style="display:inline">
+                    <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+                    <input type="hidden" name="personId"   value="@Model.PersonId" />
+                    <input type="hidden" name="status"     value="0" />
+                    <button type="submit" class="bc-btn bc-btn-sm">&#x21BA; Zurück auf Entwurf</button>
+                </form>
+            }
+        </div>
+    </div>
+
+    <h1 class="bc-card-title">
+        <span class="bc-title-nr">@Model.PersonName</span>
+        <span class="bc-title-sep"> · </span>
+        <span>Einladung</span>
+        @if (Model.EinladStatus == 1)
+        {
+            <span class="bc-title-status bc-badge" style="background:#dff6dd;color:#107C10">Fertig</span>
+        }
+        else
+        {
+            <span class="bc-title-status bc-badge" style="background:#fff4ce;color:#8a6914">Entwurf</span>
+        }
+    </h1>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+
+    @* Druckbares Dokument *@
+    <div id="einladung-dokument" style="max-width:800px;margin:0 auto;padding:24px;background:#fff;border:1px solid #e0e0e0;font-size:13px;line-height:1.6">
+
+        @* Anschreiben *@
+        @if (!string.IsNullOrEmpty(Model.HtmlAnschreiben))
+        {
+            <div style="margin-bottom:20px">@Html.Raw(Model.HtmlAnschreiben)</div>
+        }
+
+        @* Zahlungsplan *@
+        @if (!string.IsNullOrEmpty(Model.HtmlZahlungsplan))
+        {
+            <div style="margin-bottom:20px;padding:16px;background:#f9f9f9;border-left:3px solid #1F3864">
+                @Html.Raw(Model.HtmlZahlungsplan)
+            </div>
+        }
+
+        @* Internat (nur wenn gebucht) *@
+        @if (Model.HatInternat && !string.IsNullOrEmpty(Model.HtmlInternat))
+        {
+            <div style="margin-bottom:20px;padding:16px;background:#f0f8ff;border-left:3px solid #0078D4">
+                @Html.Raw(Model.HtmlInternat)
+            </div>
+        }
+
+        @* Ratenplan *@
+        @if (!string.IsNullOrEmpty(Model.HtmlRatenplan))
+        {
+            <div style="margin-bottom:20px">@Html.Raw(Model.HtmlRatenplan)</div>
+        }
+
+        @* Schlusstext *@
+        @if (!string.IsNullOrEmpty(Model.HtmlSchlusstext))
+        {
+            <div style="margin-top:30px">@Html.Raw(Model.HtmlSchlusstext)</div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+<style>
+@@media print {
+    .bc-card-topbar, .bc-card-title, nav { display: none !important; }
+    .bc-page { padding: 0 !important; }
+    #einladung-dokument { border: none !important; padding: 0 !important; max-width: 100% !important; }
+}
+</style>
+}

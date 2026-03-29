@@ -1,0 +1,230 @@
+@page
+@model Schulverwaltung.Web.Pages.Internat.ZimmerModel
+@{ ViewData["Title"] = "Internat – Zimmerverwaltung"; }
+
+<div class="bc-page">
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Internat" class="bc-back-btn">&#x2190;</a>
+            <span class="bc-page-badge">Internat | Zimmer</span>
+        </div>
+        <button type="button" class="bc-btn bc-btn-primary"
+                onclick="document.getElementById('modal-zimmer').style.display='flex'">
+            + Neues Zimmer
+        </button>
+    </div>
+
+    <h1 class="bc-card-title"><span>Zimmerverwaltung</span></h1>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+
+    @* ── Kapazitätskacheln ──────────────────────────────────────────────────── *@
+    <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        @{
+            var kacheln = new[] {
+                ("Zimmer",       Model.Stats.ZimmerGesamt.ToString(), "#00B7C3"),
+                ("Betten",       Model.Stats.BettenGesamt.ToString(), "#00B7C3"),
+                ("Heute belegt", Model.Stats.HeuteBelegt.ToString(),  "#D83B01"),
+                ("Heute frei",   Model.Stats.HeuteFrei.ToString(),    "#107C10")
+            };
+        }
+        @foreach (var (label, wert, farbe) in kacheln)
+        {
+            <div style="background:#fff;border:1px solid #edebe9;padding:12px 20px;min-width:120px;text-align:center">
+                <div style="font-size:24px;font-weight:700;color:@farbe">@wert</div>
+                <div style="font-size:11px;color:#605e5c;margin-top:2px">@label</div>
+            </div>
+        }
+    </div>
+
+    @* ── Zimmertabelle ──────────────────────────────────────────────────────── *@
+    <table class="bc-table" style="width:100%">
+        <thead>
+            <tr>
+                <th style="width:100px">Nr</th>
+                <th>Bezeichnung</th>
+                <th style="width:70px">Kap.</th>
+                <th style="width:160px">Status</th>
+                <th style="width:160px"></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var z in Model.ZimmerListe)
+            {
+                <tr>
+                    <td><strong>@z.ZimmerNr</strong></td>
+                    <td style="color:#605e5c">@z.Bezeichnung</td>
+                    <td style="text-align:center">@z.Kapazitaet</td>
+                    <td>
+                        @if (z.Gesperrt)
+                        {
+                            <span style="color:#c50f1f;font-size:11px;font-weight:600" title="@z.SperrGrund">⚠ Gesperrt</span>
+                        }
+                        else if (z.AktuellBelegt >= z.Kapazitaet)
+                        {
+                            <span style="color:#0078D4;font-size:11px">● Voll belegt (@z.AktuellBelegt/@z.Kapazitaet)</span>
+                        }
+                        else if (z.AktuellBelegt > 0)
+                        {
+                            <span style="color:#107C10;font-size:11px">● Teilbelegt (@z.AktuellBelegt/@z.Kapazitaet)</span>
+                        }
+                        else
+                        {
+                            <span style="color:#107C10;font-size:11px">● Frei</span>
+                        }
+                    </td>
+                    <td style="white-space:nowrap">
+                        <button type="button" class="bc-btn bc-btn-sm"
+                                onclick="openEditModal(@z.RaumId,'@z.ZimmerNr','@(z.Bezeichnung.Replace("'","\\'"))' ,@z.Kapazitaet,'@(z.Notiz?.Replace("'","\\'")??"")' )">
+                            Bearbeiten
+                        </button>
+                        @if (z.Gesperrt)
+                        {
+                            <form method="post" asp-page-handler="Entsperren" style="display:inline">
+                                <input type="hidden" name="zimmerId" value="@z.RaumId" />
+                                <button type="submit" class="bc-btn bc-btn-sm" style="color:#107C10">Entsperren</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <button type="button" class="bc-btn bc-btn-sm"
+                                    onclick="openSperrModal(@z.RaumId,'@z.ZimmerNr')">Sperren</button>
+                        }
+                        <form method="post" asp-page-handler="Loeschen" style="display:inline"
+                              onsubmit="return confirm('Zimmer @z.ZimmerNr wirklich löschen?')">
+                            <input type="hidden" name="zimmerId" value="@z.RaumId" />
+                            <button type="submit" class="bc-btn bc-btn-sm bc-icon-btn-danger">🗑</button>
+                        </form>
+                    </td>
+                </tr>
+                @* Protokoll-Zeile (aufklappbar) *@
+                var posten = Model.Protokoll.TryGetValue(z.RaumId, out var p) ? p : [];
+                @if (posten.Any())
+                {
+                    <tr>
+                        <td colspan="5" style="padding:0;border-top:none">
+                            <details style="font-size:11px;color:#605e5c">
+                                <summary style="cursor:pointer;padding:2px 8px;background:#faf9f8;user-select:none">
+                                    Protokoll (@posten.Count Einträge)
+                                </summary>
+                                <table style="width:100%;border-collapse:collapse;margin:0">
+                                    @foreach (var pk in posten.Take(20))
+                                    {
+                                        <tr style="border-bottom:1px solid #edebe9">
+                                            <td style="padding:2px 8px;width:140px">@pk.Zeitstempel.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                            <td style="padding:2px 8px;width:160px;font-weight:600">@pk.Ereignis</td>
+                                            <td style="padding:2px 8px">@(pk.PersonName ?? pk.Feld ?? "")</td>
+                                            <td style="padding:2px 8px;color:#a19f9d">@pk.NeuerWert</td>
+                                            <td style="padding:2px 8px;color:#a19f9d">@pk.AusfuehrendUser</td>
+                                        </tr>
+                                    }
+                                </table>
+                            </details>
+                        </td>
+                    </tr>
+                }
+            }
+            @if (!Model.ZimmerListe.Any())
+            {
+                <tr><td colspan="5" style="text-align:center;color:#a19f9d;padding:16px">
+                    Noch keine Zimmer vorhanden.
+                </td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@* Modal: Zimmer anlegen / bearbeiten *@
+<div id="modal-zimmer" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:#fff;padding:24px;min-width:420px;border:1px solid #ccc">
+        <h6 id="modal-zimmer-titel" style="margin:0 0 16px;font-size:13px;font-weight:600">Neues Zimmer</h6>
+        <form method="post" asp-page-handler="Speichern">
+            <input type="hidden" name="raumId" id="modal-rid" value="0" />
+
+            <div class="bc-fields-2col">
+                <div class="bc-field">
+                    <span class="bc-field-label req">Zimmernummer</span>
+                    <span class="bc-field-dots"></span>
+                    <div class="bc-field-right bc-field-right-md">
+                        <input name="zimmerNr" id="modal-znr" class="bc-field-ctrl" maxlength="20" />
+                    </div>
+                </div>
+                <div class="bc-field">
+                    <span class="bc-field-label">Bezeichnung</span>
+                    <span class="bc-field-dots"></span>
+                    <div class="bc-field-right bc-field-right-lg">
+                        <input name="bezeichnung" id="modal-zbez" class="bc-field-ctrl" maxlength="200" placeholder="z.B. Alpenblick" />
+                    </div>
+                </div>
+                <div class="bc-field">
+                    <span class="bc-field-label req">Kapazität</span>
+                    <span class="bc-field-dots"></span>
+                    <div class="bc-field-right bc-field-right-sm">
+                        <input name="kapazitaet" id="modal-zkap" type="number" min="1" value="1" class="bc-field-ctrl" />
+                    </div>
+                </div>
+                <div class="bc-field-block bc-field-full">
+                    <label class="bc-field-label">Notiz</label>
+                    <textarea name="notiz" id="modal-znotiz" class="bc-field-ctrl" rows="2"
+                              style="width:100%;resize:vertical"></textarea>
+                </div>
+            </div>
+
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+                <button type="button" class="bc-btn"
+                        onclick="document.getElementById('modal-zimmer').style.display='none'">Abbrechen</button>
+                <button type="submit" class="bc-btn bc-btn-primary">Speichern</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@* Modal: Zimmer sperren *@
+<div id="modal-sperren" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:#fff;padding:24px;min-width:360px;border:1px solid #ccc">
+        <h6 style="margin:0 0 12px;font-size:13px;font-weight:600">Zimmer sperren</h6>
+        <form method="post" asp-page-handler="Sperren">
+            <input type="hidden" name="zimmerId" id="sperr-zid" value="0" />
+            <div class="bc-field bc-field-full">
+                <span class="bc-field-label">Sperrgrund</span>
+                <span class="bc-field-dots"></span>
+                <div class="bc-field-right bc-field-right-lg">
+                    <input name="sperrGrund" id="sperr-grund" class="bc-field-ctrl" placeholder="z.B. Renovierung" />
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+                <button type="button" class="bc-btn"
+                        onclick="document.getElementById('modal-sperren').style.display='none'">Abbrechen</button>
+                <button type="submit" class="bc-btn" style="background:#c50f1f;color:#fff;border-color:#c50f1f">Sperren</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+document.getElementById('modal-zimmer').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+});
+document.getElementById('modal-sperren').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+});
+function openEditModal(id, nr, bez, kap, notiz) {
+    document.getElementById('modal-rid').value    = id;
+    document.getElementById('modal-znr').value    = nr;
+    document.getElementById('modal-zbez').value   = bez;
+    document.getElementById('modal-zkap').value   = kap;
+    document.getElementById('modal-znotiz').value = notiz;
+    document.getElementById('modal-zimmer-titel').textContent = 'Zimmer bearbeiten';
+    document.getElementById('modal-zimmer').style.display = 'flex';
+}
+function openSperrModal(id, nr) {
+    document.getElementById('sperr-zid').value   = id;
+    document.getElementById('sperr-grund').value = '';
+    document.getElementById('modal-sperren').style.display = 'flex';
+}
+</script>
+}

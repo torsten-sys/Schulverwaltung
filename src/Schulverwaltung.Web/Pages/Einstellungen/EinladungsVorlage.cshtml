@@ -1,0 +1,81 @@
+@page
+@model Schulverwaltung.Web.Pages.Einstellungen.EinladungsVorlageModel
+@{ ViewData["Title"] = "Einladungsvorlage"; }
+
+<div class="bc-page">
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Einstellungen" class="bc-back-btn">&#x2190;</a>
+            <span class="bc-page-badge">EINLADUNGSVORLAGE</span>
+        </div>
+        <div class="bc-card-topbar-right">
+            <button type="submit" form="form-vorlage" class="bc-icon-btn" title="Speichern">&#x2714;</button>
+        </div>
+    </div>
+
+    <h1 class="bc-card-title">
+        <span>Einladungsvorlage</span>
+        <span class="bc-title-sep">·</span>
+        <span style="font-size:13px;font-weight:400;color:#605e5c">Meisterkurs</span>
+    </h1>
+
+    @if (!string.IsNullOrEmpty(Model.Meldung))
+    {
+        <div class="bc-alert" style="background:#dff6dd;color:#107C10;border-color:#a0d8a0">@Model.Meldung</div>
+    }
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+
+    <p style="font-size:12px;color:#605e5c;margin:0 0 16px">
+        Verfügbare Platzhalter:
+        <code>{{Anrede}}</code> <code>{{Nachname}}</code> <code>{{VollerName}}</code>
+        <code>{{Strasse}}</code> <code>{{PLZ}}</code> <code>{{Ort}}</code>
+        <code>{{LehrgangNr}}</code> <code>{{LehrgangBezeichnung}}</code>
+        <code>{{LehrgangStart}}</code> <code>{{LehrgangEnde}}</code>
+        <code>{{KostenLehrgang}}</code> <code>{{GrundzahlungBetrag}}</code>
+        <code>{{GrundzahlungTermin}}</code> <code>{{BeginnAbbuchung}}</code>
+        <code>{{RestbetragNachGrundzahlung}}</code> <code>{{AnzahlRaten}}</code>
+        <code>{{Monatsrate}}</code> <code>{{Ratenplan}}</code>
+        <code>{{KautionWerkstatt}}</code> <code>{{KautionInternat}}</code>
+        <code>{{Verwaltungspauschale}}</code>
+        · Internat (nur wenn gebucht):
+        <code>{{InternatZimmerTyp}}</code> <code>{{InternatZimmerNr}}</code>
+        <code>{{InternatKosten}}</code> <code>{{InternatEinzug}}</code> <code>{{InternatAuszug}}</code>
+    </p>
+
+    <form id="form-vorlage" method="post" asp-page-handler="Speichern">
+        <input type="hidden" name="Form.EinladungsVorlageId" value="1" />
+
+        <div class="bc-meister-section">
+            <p class="bc-section-title">1. Anschreiben</p>
+            <textarea name="Form.Anschreiben" rows="6" class="bc-field-ctrl"
+                      style="width:100%;font-family:monospace;font-size:12px;resize:vertical">@Model.Form.Anschreiben</textarea>
+        </div>
+
+        <div class="bc-meister-section">
+            <p class="bc-section-title">2. Zahlungsplan</p>
+            <textarea name="Form.ZahlungsplanText" rows="6" class="bc-field-ctrl"
+                      style="width:100%;font-family:monospace;font-size:12px;resize:vertical">@Model.Form.ZahlungsplanText</textarea>
+        </div>
+
+        <div class="bc-meister-section">
+            <p class="bc-section-title">3. Internat-Abschnitt <span style="font-weight:400;color:#605e5c">(wird nur eingeblendet wenn TN eine Internatsbuchung hat)</span></p>
+            <textarea name="Form.InternatAbschnitt" rows="5" class="bc-field-ctrl"
+                      style="width:100%;font-family:monospace;font-size:12px;resize:vertical">@Model.Form.InternatAbschnitt</textarea>
+        </div>
+
+        <div class="bc-meister-section">
+            <p class="bc-section-title">4. Ratenplan-Abschnitt <span style="font-weight:400;color:#605e5c">({{Ratenplan}} wird durch HTML-Tabelle ersetzt)</span></p>
+            <textarea name="Form.RatenplanText" rows="4" class="bc-field-ctrl"
+                      style="width:100%;font-family:monospace;font-size:12px;resize:vertical">@Model.Form.RatenplanText</textarea>
+        </div>
+
+        <div class="bc-meister-section" style="border-bottom:none">
+            <p class="bc-section-title">5. Schlusstext</p>
+            <textarea name="Form.Schlusstext" rows="5" class="bc-field-ctrl"
+                      style="width:100%;font-family:monospace;font-size:12px;resize:vertical">@Model.Form.Schlusstext</textarea>
+        </div>
+    </form>
+</div>

@@ -1,0 +1,177 @@
+@page
+@model Schulverwaltung.Web.Pages.Berichte.VorschauModel
+@using System.Globalization
+@{ Layout = null; var de = new CultureInfo("de-DE"); }
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@Model.Titel</title>
+    <link rel="stylesheet" href="/css/schulverwaltung.css" />
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #e8e8e8; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 13px; color: #201f1e; }
+
+        /* Toolbar */
+        .bv-toolbar {
+            position: sticky; top: 0; z-index: 100;
+            background: #1F3864; color: #fff;
+            display: flex; align-items: center; gap: 8px; padding: 7px 16px;
+            border-bottom: 2px solid #00B7C3;
+        }
+        .bv-toolbar-title { flex: 1; font-size: 13px; font-weight: 600; }
+        .bv-btn {
+            padding: 4px 12px; font-size: 12px; cursor: pointer; border: none;
+            background: #00B7C3; color: #fff; font-family: inherit;
+        }
+        .bv-btn:hover { background: #00868f; }
+        .bv-btn-ghost {
+            background: transparent; border: 1px solid rgba(255,255,255,0.4); color: #fff;
+        }
+        .bv-btn-ghost:hover { background: rgba(255,255,255,0.12); }
+
+        /* Document container */
+        .bv-page {
+            max-width: 840px; margin: 20px auto 40px;
+            background: #fff; padding: 32px 48px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+        }
+
+        /* Briefkopf / Brieffuß */
+        .bv-kopf { margin-bottom: 28px; padding-bottom: 16px; border-bottom: 2px solid #1F3864; }
+        .bv-fuss { margin-top: 28px; padding-top: 12px; border-top: 1px solid #e0e0e0; font-size: 11px; color: #605e5c; }
+
+        /* Document title & meta */
+        .bv-doc-title { font-size: 18px; font-weight: 700; color: #1F3864; margin: 0 0 12px; }
+        .bv-meta-grid { display: grid; grid-template-columns: 140px 1fr; gap: 3px 12px; margin-bottom: 20px; font-size: 12px; }
+        .bv-meta-label { color: #605e5c; }
+        .bv-meta-value { font-weight: 600; }
+
+        /* Table */
+        .bv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .bv-table th {
+            background: #1F3864; color: #fff; text-align: left;
+            padding: 5px 8px; font-weight: 600; font-size: 11px; letter-spacing: 0.3px;
+        }
+        .bv-table td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+        .bv-table tr:nth-child(even) td { background: #f9f9f9; }
+        .bv-table .col-nr { width: 90px; }
+        .bv-table .col-date { width: 100px; }
+        .bv-table .col-status { width: 90px; }
+        .bv-summary { text-align: right; font-size: 12px; color: #605e5c; margin-top: 8px; }
+
+        /* Print */
+        @@media print {
+            body { background: #fff; }
+            .bv-toolbar { display: none; }
+            .bv-page { margin: 0; padding: 0; max-width: none; box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="bv-toolbar">
+    <span class="bv-toolbar-title">@Model.Titel</span>
+    <button class="bv-btn" onclick="window.print()">&#128424; Drucken</button>
+    <button class="bv-btn bv-btn-ghost"
+            onclick="(window.parent !== window) ? window.parent.postMessage({type:'modalClose',refresh:false},'*') : window.close()">
+        &#10005; Schließen
+    </button>
+</div>
+
+<div class="bv-page">
+
+    @* Briefkopf *@
+    @if (!string.IsNullOrWhiteSpace(Model.KopfHtml))
+    {
+        <div class="bv-kopf">@Html.Raw(Model.KopfHtml)</div>
+    }
+
+    @* ── Teilnehmerliste ── *@
+    @if (Model.Key == "lehrgang-teilnehmerliste" && Model.Lehrgang != null)
+    {
+        <h2 class="bv-doc-title">Teilnehmerliste</h2>
+
+        <div class="bv-meta-grid">
+            <span class="bv-meta-label">Lehrgang</span>
+            <span class="bv-meta-value">@Model.Lehrgang.LehrgangNr · @Model.Lehrgang.Bezeichnung</span>
+
+            @if (Model.Lehrgang.Art != null)
+            {
+                <span class="bv-meta-label">Lehrgangsart</span>
+                <span class="bv-meta-value">@Model.Lehrgang.Art.Bezeichnung</span>
+            }
+
+            <span class="bv-meta-label">Zeitraum</span>
+            <span class="bv-meta-value">
+                @Model.Lehrgang.StartDatum.ToString("dd.MM.yyyy")
+                @if (Model.Lehrgang.EndDatum.HasValue)
+                {
+                    <span> – @Model.Lehrgang.EndDatum.Value.ToString("dd.MM.yyyy")</span>
+                }
+            </span>
+
+            <span class="bv-meta-label">Druckdatum</span>
+            <span class="bv-meta-value">@DateTime.Today.ToString("dd.MM.yyyy")</span>
+        </div>
+
+        <table class="bv-table">
+            <thead>
+                <tr>
+                    <th class="col-nr">Nr.</th>
+                    <th>Name</th>
+                    <th class="col-date">Anmeldung</th>
+                    <th class="col-status">Status</th>
+                    <th>Betrieb</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{ int zeilennr = 0; }
+                @foreach (var lp in Model.Teilnehmer)
+                {
+                    zeilennr++;
+                    var statusText = lp.Status switch {
+                        0 => "Warteliste",
+                        1 => "Angemeldet",
+                        2 => "Abgemeldet",
+                        3 => "Bestanden",
+                        _ => ""
+                    };
+                    var statusFarbe = lp.Status switch {
+                        0 => "color:#8a6914",
+                        1 => "color:#107C10",
+                        2 => "color:#c50f1f",
+                        3 => "color:#00868f",
+                        _ => ""
+                    };
+                    <tr>
+                        <td class="col-nr" style="color:#605e5c">@lp.Person.PersonNr</td>
+                        <td>@lp.Person.Nachname, @lp.Person.Vorname</td>
+                        <td class="col-date">@lp.AnmeldungsDatum.ToString("dd.MM.yyyy")</td>
+                        <td class="col-status" style="@statusFarbe;font-weight:600">@statusText</td>
+                        <td>@(lp.BetriebName ?? "–")</td>
+                    </tr>
+                }
+                @if (!Model.Teilnehmer.Any())
+                {
+                    <tr><td colspan="5" style="text-align:center;color:#a19f9d;padding:12px">Keine Teilnehmer vorhanden</td></tr>
+                }
+            </tbody>
+        </table>
+        <div class="bv-summary">
+            @Model.Teilnehmer.Count(lp => lp.Status == 1) Angemeldet
+            &nbsp;|&nbsp;
+            @Model.Teilnehmer.Count Gesamt
+        </div>
+    }
+
+    @* Brieffuß *@
+    @if (!string.IsNullOrWhiteSpace(Model.FussHtml))
+    {
+        <div class="bv-fuss">@Html.Raw(Model.FussHtml)</div>
+    }
+
+</div>
+</body>
+</html>

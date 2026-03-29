@@ -1,0 +1,59 @@
+@page
+@model IndexModel
+@using Schulverwaltung.Infrastructure.Services
+@{
+    ViewData["Title"] = "Startseite";
+    var rolle = Model.AppRolle;
+    string rolleBadgeStyle = rolle switch {
+        0 => "background:#f3f2f1;color:#605e5c",
+        1 => "background:#cce4ff;color:#0078D4",
+        2 => "background:#e0f3f3;color:#00604A",
+        3 => "background:#1F3864;color:#fff;font-weight:700",
+        _ => "background:#f3f2f1;color:#605e5c"
+    };
+}
+
+<div class="bc-page">
+    <div style="background:#fff;border:1px solid #edebe9;padding:24px 32px;margin-bottom:16px;display:flex;align-items:center;gap:16px">
+        <div>
+            <div style="font-size:18px;font-weight:600;color:#1F3864;margin-bottom:4px">
+                Willkommen, @(Model.DisplayName ?? Model.AdBenutzername)!
+            </div>
+            <span style="padding:2px 10px;font-size:11px;@rolleBadgeStyle">
+                @AppBenutzerService.RolleText(rolle)
+            </span>
+        </div>
+    </div>
+
+    @if (rolle == 0)
+    {
+        <div class="bc-alert" style="background:#fff4ce;border-color:#f3d6a4;color:#8a6914;margin-bottom:16px">
+            Sie sind als <strong>Gast</strong> angemeldet.
+            Sie können Listen einsehen, aber keine Daten bearbeiten.
+            Wenden Sie sich an einen Administrator, um weitere Berechtigungen zu erhalten.
+        </div>
+    }
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:8px">
+        <a href="/Lehrgaenge" style="display:block;background:#fff;border:1px solid #edebe9;padding:20px;text-decoration:none;color:#1F3864">
+            <div style="font-size:28px;margin-bottom:8px">&#127979;</div>
+            <div style="font-weight:600;font-size:13px">Lehrgänge</div>
+        </a>
+        <a href="/Personen" style="display:block;background:#fff;border:1px solid #edebe9;padding:20px;text-decoration:none;color:#1F3864">
+            <div style="font-size:28px;margin-bottom:8px">&#128100;</div>
+            <div style="font-weight:600;font-size:13px">Personen</div>
+        </a>
+        <a href="/Betriebe" style="display:block;background:#fff;border:1px solid #edebe9;padding:20px;text-decoration:none;color:#1F3864">
+            <div style="font-size:28px;margin-bottom:8px">&#127968;</div>
+            <div style="font-weight:600;font-size:13px">Betriebe</div>
+        </a>
+        <a href="/Organisationen" style="display:block;background:#fff;border:1px solid #edebe9;padding:20px;text-decoration:none;color:#1F3864">
+            <div style="font-size:28px;margin-bottom:8px">&#127970;</div>
+            <div style="font-weight:600;font-size:13px">Organisationen</div>
+        </a>
+        <a href="/Internat" style="display:block;background:#fff;border:1px solid #edebe9;padding:20px;text-decoration:none;color:#1F3864">
+            <div style="font-size:28px;margin-bottom:8px">&#127968;</div>
+            <div style="font-weight:600;font-size:13px">Internat</div>
+        </a>
+    </div>
+</div>

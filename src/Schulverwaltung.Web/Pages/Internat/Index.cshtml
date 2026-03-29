@@ -1,0 +1,259 @@
+@page
+@model Schulverwaltung.Web.Pages.Internat.IndexModel
+@using Schulverwaltung.Infrastructure.Services
+@{ ViewData["Title"] = "Internat – Belegungsplan"; }
+
+@functions {
+    static string BTypFarbe(byte t) => InternatService.BelegungsTypFarbe(t);
+    static string BTypText(byte t)  => InternatService.BelegungsTypText(t);
+}
+
+@{
+    var prevM = Model.Monat == 1  ? 12 : Model.Monat - 1;
+    var prevJ = Model.Monat == 1  ? Model.Jahr - 1 : Model.Jahr;
+    var nextM = Model.Monat == 12 ? 1  : Model.Monat + 1;
+    var nextJ = Model.Monat == 12 ? Model.Jahr + 1 : Model.Jahr;
+    var monatsName = new System.Globalization.CultureInfo("de-DE")
+        .DateTimeFormat.GetMonthName(Model.Monat);
+}
+
+<div class="bc-page">
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <span class="bc-page-badge">Internat</span>
+        </div>
+        @if (Model.DarfBearbeiten)
+        {
+        <div style="display:flex;gap:6px">
+            <a href="/Internat/Zimmer" class="bc-btn">Zimmer verwalten</a>
+            <a href="/Internat/Belegung" class="bc-btn bc-btn-primary">+ Neue Belegung</a>
+        </div>
+        }
+    </div>
+
+    <h1 class="bc-card-title"><span>Internat – Belegungsplan</span></h1>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+
+    @* ── Kapazitätskacheln ──────────────────────────────────────────────────── *@
+    <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+        @{
+            var kacheln = new[] {
+                ("Zimmer gesamt",  Model.Stats.ZimmerGesamt.ToString(), "#00B7C3"),
+                ("Betten gesamt",  Model.Stats.BettenGesamt.ToString(), "#00B7C3"),
+                ("Heute belegt",   Model.Stats.HeuteBelegt.ToString(),  "#D83B01"),
+                ("Heute frei",     Model.Stats.HeuteFrei.ToString(),    "#107C10")
+            };
+        }
+        @foreach (var (label, wert, farbe) in kacheln)
+        {
+            <div style="background:#fff;border:1px solid #edebe9;padding:12px 20px;min-width:140px;text-align:center">
+                <div style="font-size:28px;font-weight:700;color:@farbe">@wert</div>
+                <div style="font-size:11px;color:#605e5c;margin-top:2px">@label</div>
+            </div>
+        }
+    </div>
+
+    @* ── Tabs ────────────────────────────────────────────────────────────────── *@
+    <nav class="bc-action-tabs">
+        <button class="bc-action-tab @(Model.ActiveTab == "plan"  ? "active" : "")"
+                data-panel="panel-plan"  onclick="switchTab(this)">Belegungsplan</button>
+        <button class="bc-action-tab @(Model.ActiveTab == "liste" ? "active" : "")"
+                data-panel="panel-liste" onclick="switchTab(this)">Belegungsliste</button>
+    </nav>
+
+    @* ── Tab: Belegungsplan ──────────────────────────────────────────────────── *@
+    <div id="panel-plan" class="bc-tab-panel @(Model.ActiveTab == "plan" ? "active" : "")">
+        <div style="display:flex;align-items:center;gap:12px;margin:12px 0">
+            <a href="?monat=@prevM&jahr=@prevJ&activeTab=plan" class="bc-btn">◄</a>
+            <strong style="font-size:15px;min-width:140px;text-align:center">@monatsName @Model.Jahr</strong>
+            <a href="?monat=@nextM&jahr=@nextJ&activeTab=plan" class="bc-btn">►</a>
+        </div>
+
+        <div style="overflow-x:auto">
+            <table style="border-collapse:collapse;font-size:11px;min-width:800px">
+                <thead>
+                    <tr>
+                        <th style="min-width:80px;padding:4px 6px;background:#f3f2f1;border:1px solid #edebe9;text-align:left">Zimmer</th>
+                        @foreach (var tag in Model.TageImMonat)
+                        {
+                            var datum = new DateOnly(Model.Jahr, Model.Monat, tag);
+                            var istHeute = datum == DateOnly.FromDateTime(DateTime.Today);
+                            <th style="width:28px;padding:2px;background:@(istHeute ? "#cce4ff" : "#f3f2f1");border:1px solid #edebe9;text-align:center;font-weight:@(istHeute ? "700" : "400")">@tag</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var zeile in Model.ZimmerPlan)
+                    {
+                        <tr>
+                            <td style="padding:3px 6px;border:1px solid #edebe9;white-space:nowrap;background:@(zeile.Gesperrt ? "#fde7e9" : "#fff")">
+                                <strong>@zeile.Anzeige</strong>
+                                @if (zeile.Gesperrt)
+                                {
+                                    <span style="color:#c50f1f;font-size:10px" title="@zeile.SperrGrund"> ⚠</span>
+                                }
+                            </td>
+                            @foreach (var tag in Model.TageImMonat)
+                            {
+                                if (zeile.Gesperrt)
+                                {
+                                    <td style="background:repeating-linear-gradient(45deg,#f3f2f1,#f3f2f1 3px,#e1dfdd 3px,#e1dfdd 6px);border:1px solid #edebe9"></td>
+                                }
+                                else if (zeile.Tage.TryGetValue(tag, out var belegungen))
+                                {
+                                    <td style="padding:1px;border:1px solid #edebe9;vertical-align:top">
+                                        @foreach (var b in belegungen)
+                                        {
+                                            <a href="/Internat/Belegung?belegungId=@b.BelegungId"
+                                               title="@b.PersonName (@BTypText(b.BelegungsTyp))"
+                                               style="display:block;background:@BTypFarbe(b.BelegungsTyp);color:#fff;font-size:9px;overflow:hidden;white-space:nowrap;padding:0 2px;text-decoration:none;margin-bottom:1px">
+                                                @(b.PersonName.Length > 10 ? b.PersonName[..10] : b.PersonName)
+                                            </a>
+                                        }
+                                    </td>
+                                }
+                                else
+                                {
+                                    var datum2 = new DateOnly(Model.Jahr, Model.Monat, tag).ToString("yyyy-MM-dd");
+                                    <td style="border:1px solid #edebe9">
+                                        <a href="/Internat/Belegung?vorZimmerId=@zeile.RaumId&vorVon=@datum2"
+                                           style="display:block;width:100%;height:100%;min-height:16px"></a>
+                                    </td>
+                                }
+                            }
+                        </tr>
+                    }
+                    @if (!Model.ZimmerPlan.Any())
+                    {
+                        <tr><td colspan="@(Model.TageImMonat.Count + 1)" style="text-align:center;color:#a19f9d;padding:16px">
+                            Keine Zimmer vorhanden. <a href="/Internat/Zimmer">Zimmer anlegen ↗</a>
+                        </td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div style="display:flex;gap:16px;margin-top:8px;font-size:11px">
+            @foreach (var (label, farbe) in new[] { ("Meisterkurs","#1F3864"), ("Sonderlehrgang","#00B7C3"), ("Dozent","#107C10") })
+            {
+                <span><span style="display:inline-block;width:12px;height:12px;background:@farbe;vertical-align:middle;margin-right:3px"></span>@label</span>
+            }
+        </div>
+    </div>
+
+    @* ── Tab: Belegungsliste ─────────────────────────────────────────────────── *@
+    <div id="panel-liste" class="bc-tab-panel @(Model.ActiveTab == "liste" ? "active" : "")">
+        <div class="bc-action-bar" style="margin:12px 0 8px">
+            <form method="get" style="display:contents">
+                <input type="hidden" name="activeTab" value="liste" />
+                <input type="hidden" name="monat" value="@Model.Monat" />
+                <input type="hidden" name="jahr"  value="@Model.Jahr" />
+                <select name="filterTyp" class="bc-field-ctrl" style="width:160px">
+                    <option value="">– Alle Typen –</option>
+                    @if (Model.FilterTyp == 0) { <option value="0" selected>Meisterkurs</option> }
+                    else                       { <option value="0">Meisterkurs</option> }
+                    @if (Model.FilterTyp == 1) { <option value="1" selected>Sonderlehrgang</option> }
+                    else                       { <option value="1">Sonderlehrgang</option> }
+                    @if (Model.FilterTyp == 2) { <option value="2" selected>Dozent</option> }
+                    else                       { <option value="2">Dozent</option> }
+                </select>
+                <select name="filterBezahlt" class="bc-field-ctrl" style="width:140px">
+                    <option value="">– Bezahltstatus –</option>
+                    @if (Model.FilterBezahlt == "ja")   { <option value="ja"   selected>Bezahlt</option> }
+                    else                                { <option value="ja">Bezahlt</option> }
+                    @if (Model.FilterBezahlt == "nein") { <option value="nein" selected>Ausstehend</option> }
+                    else                                { <option value="nein">Ausstehend</option> }
+                </select>
+                <button type="submit" class="bc-btn">Filtern</button>
+                @if (Model.FilterTyp.HasValue || !string.IsNullOrEmpty(Model.FilterBezahlt))
+                {
+                    <a href="?activeTab=liste&monat=@Model.Monat&jahr=@Model.Jahr" class="bc-btn">✕ Reset</a>
+                }
+            </form>
+        </div>
+
+        <table class="bc-table" style="width:100%;font-size:12px">
+            <thead>
+                <tr>
+                    <th>Zimmer</th>
+                    <th>Person</th>
+                    <th>Lehrgang</th>
+                    <th style="width:100px">Typ</th>
+                    <th style="width:80px">Von</th>
+                    <th style="width:80px">Bis</th>
+                    <th class="col-num">Kosten</th>
+                    <th style="width:80px">Bezahlt</th>
+                    <th style="width:160px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in Model.Belegungsliste)
+                {
+                    <tr>
+                        <td><strong>@b.ZimmerAnzeige</strong></td>
+                        <td>@b.PersonName<br /><small style="color:#605e5c">@b.PersonNr</small></td>
+                        <td style="color:#605e5c">@(b.LehrgangNr ?? "–")</td>
+                        <td>
+                            <span style="padding:1px 6px;font-size:11px;border-radius:2px;background:@BTypFarbe(b.BelegungsTyp);color:#fff">
+                                @BTypText(b.BelegungsTyp)
+                            </span>
+                        </td>
+                        <td>@b.Von.ToString("dd.MM.yyyy")</td>
+                        <td>@b.Bis.ToString("dd.MM.yyyy")</td>
+                        <td class="col-num">
+                            @if (b.KostenArt == 2) { <span style="color:#a19f9d">unentgeltlich</span> }
+                            else { @(b.Kosten?.ToString("0.00") ?? "–") <span style="color:#605e5c"> €</span> }
+                        </td>
+                        <td style="text-align:center">
+                            @if (b.Bezahlt)
+                            {
+                                <span style="color:#107C10;font-weight:600" title="@b.BezahltAm?.ToString("dd.MM.yyyy")">✓</span>
+                            }
+                            else if (b.KostenArt != 2)
+                            {
+                                <span style="color:#D83B01">offen</span>
+                            }
+                            else { <span style="color:#a19f9d">–</span> }
+                        </td>
+                        <td style="white-space:nowrap">
+                            <a href="/Internat/Belegung?belegungId=@b.BelegungId" class="bc-btn bc-btn-sm">Bearbeiten</a>
+                            @if (!b.Bezahlt && b.KostenArt != 2)
+                            {
+                                <form method="post" asp-page-handler="Bezahlt" style="display:inline">
+                                    <input type="hidden" name="belegungId" value="@b.BelegungId" />
+                                    <button type="submit" class="bc-btn bc-btn-sm" style="color:#107C10">✓ Bezahlt</button>
+                                </form>
+                            }
+                            <form method="post" asp-page-handler="Stornieren" style="display:inline"
+                                  onsubmit="return confirm('Belegung wirklich stornieren?')">
+                                <input type="hidden" name="belegungId" value="@b.BelegungId" />
+                                <button type="submit" class="bc-btn bc-btn-sm bc-icon-btn-danger">✕</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Belegungsliste.Any())
+                {
+                    <tr><td colspan="9" style="text-align:center;color:#a19f9d;padding:16px">
+                        Keine Belegungen vorhanden.
+                    </td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+function switchTab(btn) {
+    document.querySelectorAll('.bc-action-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.bc-tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.panel).classList.add('active');
+}
+</script>
+}

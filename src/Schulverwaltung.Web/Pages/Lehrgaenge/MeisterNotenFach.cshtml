@@ -1,0 +1,195 @@
+@page
+@model Schulverwaltung.Web.Pages.Lehrgaenge.MeisterNotenFachModel
+@{ ViewData["Title"] = "Noten · " + (Model.AktuellesFach?.Bezeichnung ?? ""); }
+
+<div class="bc-page">
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Lehrgaenge/Karte?id=@Model.LehrgangId" class="bc-back-btn" title="Zurück">&#8592;</a>
+            <span class="bc-page-badge">NOTEN NACH FACH</span>
+        </div>
+        <div style="display:flex;gap:6px">
+            @if (Model.AktuellesFach != null)
+            {
+                <button type="submit" form="form-noten" class="bc-btn bc-btn-primary">Speichern</button>
+            }
+            <a href="/Lehrgaenge/Karte?id=@Model.LehrgangId" class="bc-btn">Abbrechen</a>
+        </div>
+    </div>
+
+    <h1 class="bc-card-title">
+        <span class="bc-title-nr">@(Model.Lehrgang?.LehrgangNr ?? "")</span>
+        <span class="bc-title-sep">·</span>
+        <span>@(Model.Lehrgang?.Bezeichnung ?? "") › Noten · @(Model.AktuellesFach?.Bezeichnung ?? "–")</span>
+    </h1>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+
+    @* Fach-Auswahl oben *@
+    <div style="display:flex;align-items:center;gap:12px;margin:8px 0 12px 0">
+        <label style="font-size:12px;color:#605e5c">Fach:</label>
+        <form method="get" style="display:contents">
+            <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+            <select name="fachId" class="bc-field-ctrl" style="width:260px" onchange="this.form.submit()">
+                @foreach (var f in Model.AlleFaecher)
+                {
+                    @if (Model.FachId == f.FachId)
+                    {
+                        <option value="@f.FachId" selected>@f.Bezeichnung</option>
+                    }
+                    else
+                    {
+                        <option value="@f.FachId">@f.Bezeichnung</option>
+                    }
+                }
+            </select>
+        </form>
+    </div>
+
+    @* Navigation zwischen Fächern *@
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;font-size:13px">
+        @if (Model.VorherigesFachId > 0)
+        {
+            <a href="?lehrgangId=@Model.LehrgangId&fachId=@Model.VorherigesFachId" class="bc-btn bc-btn-sm">← Vorheriges</a>
+        }
+        else
+        {
+            <span class="bc-btn bc-btn-sm" style="opacity:0.4;pointer-events:none">← Vorheriges</span>
+        }
+        <span style="color:#605e5c">@Model.FachNr von @Model.FachGesamt</span>
+        @if (Model.NaechstesFachId > 0)
+        {
+            <a href="?lehrgangId=@Model.LehrgangId&fachId=@Model.NaechstesFachId" class="bc-btn bc-btn-sm">Nächstes →</a>
+        }
+        else
+        {
+            <span class="bc-btn bc-btn-sm" style="opacity:0.4;pointer-events:none">Nächstes →</span>
+        }
+    </div>
+
+    @if (Model.AktuellesFach != null)
+    {
+        @* Info-Zeile *@
+        <div style="margin-bottom:12px;font-size:12px;color:#605e5c;padding:6px 10px;background:#f9f8f7;border:1px solid #e1dfdd;display:inline-block">
+            Gewichtung: <strong>@Model.AktuellesFach.Gewichtung.ToString("0.00")</strong>
+            &nbsp;&nbsp;|&nbsp;&nbsp;
+            Ø Note: <strong>@(Model.DurchschnittsNote?.ToString("0.0") ?? "–")</strong>
+            &nbsp;&nbsp;|&nbsp;&nbsp;
+            Benotet: <strong>@Model.BenoteteTeilnehmer von @Model.GesamtTeilnehmer</strong>
+        </div>
+
+        <form id="form-noten" method="post" asp-page-handler="Speichern">
+            <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+            <input type="hidden" name="fachId"     value="@Model.FachId" />
+
+            <div style="overflow-x:auto">
+                <table class="bc-table" style="width:90%;font-size:12px">
+                    <thead>
+                        <tr>
+                            <th>Teilnehmer</th>
+                            <th style="width:90px;text-align:center">Bish. Note</th>
+                            <th style="width:90px;text-align:center">Neue Note</th>
+                            <th style="width:200px">Dozent</th>
+                            <th style="width:110px">Datum</th>
+                            <th>Notiz</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var tn in Model.Teilnehmer)
+                        {
+                            var bishNote = tn.Note;
+                            var bishStyle = bishNote switch {
+                                1 or 2 => "background:#dff6dd;color:#107C10",
+                                3 or 4 => "background:#fff4ce;color:#8a6914",
+                                5 or 6 => "background:#fde7e9;color:#c50f1f",
+                                _      => "background:#f3f2f1;color:#a19f9d;font-style:italic"
+                            };
+                            <tr>
+                                <td title="@tn.PersonNr">
+                                    <input type="hidden" name="noteIds"   value="@tn.NoteId" />
+                                    <input type="hidden" name="personIds" value="@tn.PersonId" />
+                                    @tn.PersonName
+                                </td>
+                                <td style="text-align:center">
+                                    <span style="@bishStyle;display:inline-block;min-width:28px;padding:1px 4px;font-weight:600;font-size:12px">
+                                        @(bishNote?.ToString() ?? "–")
+                                    </span>
+                                </td>
+                                <td style="text-align:center;padding:2px">
+                                    <select name="noten" class="bc-field-ctrl noten-select"
+                                            style="width:70px;text-align:center;font-weight:600">
+                                        <option value="">–</option>
+                                        @if (tn.Note == 1) { <option value="1" selected>1</option> } else { <option value="1">1</option> }
+                                        @if (tn.Note == 2) { <option value="2" selected>2</option> } else { <option value="2">2</option> }
+                                        @if (tn.Note == 3) { <option value="3" selected>3</option> } else { <option value="3">3</option> }
+                                        @if (tn.Note == 4) { <option value="4" selected>4</option> } else { <option value="4">4</option> }
+                                        @if (tn.Note == 5) { <option value="5" selected>5</option> } else { <option value="5">5</option> }
+                                        @if (tn.Note == 6) { <option value="6" selected>6</option> } else { <option value="6">6</option> }
+                                    </select>
+                                </td>
+                                <td>
+                                    <select name="dozentPersonIds" class="bc-field-ctrl" style="width:100%;font-size:11px">
+                                        <option value="">– kein –</option>
+                                        @foreach (var d in Model.DozentenListe)
+                                        {
+                                            @if (tn.DozentPersonId == d.PersonId)
+                                            {
+                                                <option value="@d.PersonId" selected>@d.AnzeigeName</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@d.PersonId">@d.AnzeigeName</option>
+                                            }
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    <input name="bewertungsDaten" type="date" class="bc-field-ctrl"
+                                           value="@(tn.BewertungsDatum?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))" />
+                                </td>
+                                <td>
+                                    <input name="notizen" class="bc-field-ctrl" style="width:100%"
+                                           value="@(tn.Notiz ?? "")" />
+                                </td>
+                            </tr>
+                        }
+                        @if (!Model.Teilnehmer.Any())
+                        {
+                            <tr><td colspan="6" style="text-align:center;color:#a19f9d;padding:16px">
+                                Keine Teilnehmer vorhanden.
+                            </td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </form>
+    }
+    else if (!Model.AlleFaecher.Any())
+    {
+        <p style="color:#a19f9d;text-align:center;padding:24px">
+            Keine Fächer angelegt. <a href="/Lehrgaenge/MeisterFaecher?lehrgangId=@Model.LehrgangId">Fächer verwalten →</a>
+        </p>
+    }
+</div>
+
+@section Scripts {
+<script>
+(function() {
+    document.querySelectorAll('.noten-select').forEach(function(sel) {
+        sel.addEventListener('change', function() { aktualisiereStyle(this); });
+        aktualisiereStyle(sel);
+    });
+
+    function aktualisiereStyle(sel) {
+        var v = parseInt(sel.value);
+        if (v === 1 || v === 2)      { sel.style.background = '#dff6dd'; sel.style.color = '#107C10'; }
+        else if (v === 3 || v === 4) { sel.style.background = '#fff4ce'; sel.style.color = '#8a6914'; }
+        else if (v === 5 || v === 6) { sel.style.background = '#fde7e9'; sel.style.color = '#c50f1f'; }
+        else                          { sel.style.background = '#f3f2f1'; sel.style.color = '#a19f9d'; }
+    }
+})();
+</script>
+}

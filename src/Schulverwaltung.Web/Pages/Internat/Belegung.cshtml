@@ -1,0 +1,213 @@
+@page
+@model Schulverwaltung.Web.Pages.Internat.BelegungModel
+@{ ViewData["Title"] = Model.IstNeu ? "Neue Belegung" : "Belegung bearbeiten"; }
+
+<div class="bc-page">
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Internat" class="bc-back-btn">&#x2190;</a>
+            <span class="bc-page-badge">Internat | @(Model.IstNeu ? "Neue Belegung" : "Belegung bearbeiten")</span>
+        </div>
+    </div>
+
+    <h1 class="bc-card-title">
+        <span>@(Model.IstNeu ? "Neue Belegung erfassen" : "Belegung bearbeiten")</span>
+    </h1>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+
+    <form method="post" id="form-belegung">
+        <input type="hidden" asp-for="Form.BelegungId" />
+
+        <div class="bc-fields-2col" style="max-width:700px">
+
+            @* Zimmer *@
+            <div class="bc-field bc-field-full">
+                <span class="bc-field-label req">Zimmer</span>
+                <span class="bc-field-dots"></span>
+                <div class="bc-field-right bc-field-right-lg">
+                    <select name="Form.ZimmerId" class="bc-field-ctrl" id="sel-zimmer">
+                        <option value="0">– Zimmer wählen –</option>
+                        @foreach (var z in Model.VerfuegbareZimmer)
+                        {
+                            if (Model.Form.ZimmerId == z.ZimmerId && z.Gesperrt)
+                            {
+                                <option value="@z.ZimmerId" selected style="color:#c50f1f">@z.Anzeige (gesperrt)</option>
+                            }
+                            else if (Model.Form.ZimmerId == z.ZimmerId)
+                            {
+                                <option value="@z.ZimmerId" selected>@z.Anzeige</option>
+                            }
+                            else if (z.Gesperrt)
+                            {
+                                <option value="@z.ZimmerId" style="color:#c50f1f">@z.Anzeige (gesperrt)</option>
+                            }
+                            else
+                            {
+                                <option value="@z.ZimmerId">@z.Anzeige</option>
+                            }
+                        }
+                    </select>
+                </div>
+            </div>
+
+            @* Person *@
+            <div class="bc-field bc-field-full">
+                <span class="bc-field-label req">Person</span>
+                <span class="bc-field-dots"></span>
+                <div class="bc-field-right bc-field-right-lg">
+                    <select name="Form.PersonId" class="bc-field-ctrl">
+                        <option value="0">– Person wählen –</option>
+                        @foreach (var p in Model.PersonenListe)
+                        {
+                            if (Model.Form.PersonId == p.PersonId)
+                            {
+                                <option value="@p.PersonId" selected>@p.Name (@p.PersonNr)</option>
+                            }
+                            else
+                            {
+                                <option value="@p.PersonId">@p.Name (@p.PersonNr)</option>
+                            }
+                        }
+                    </select>
+                </div>
+            </div>
+
+            @* Lehrgang *@
+            <div class="bc-field">
+                <span class="bc-field-label">Lehrgang</span>
+                <span class="bc-field-dots"></span>
+                <div class="bc-field-right bc-field-right-lg">
+                    <select name="Form.LehrgangId" class="bc-field-ctrl" id="sel-lehrgang">
+                        <option value="">– optional –</option>
+                        @foreach (var l in Model.LehrgangsListe)
+                        {
+                            if (Model.Form.LehrgangId == l.LehrgangId)
+                            {
+                                <option value="@l.LehrgangId" data-gebuehren="@(l.Gebuehren?.ToString("0.00") ?? "")" selected>@l.LehrgangNr – @l.Bezeichnung</option>
+                            }
+                            else
+                            {
+                                <option value="@l.LehrgangId" data-gebuehren="@(l.Gebuehren?.ToString("0.00") ?? "")">@l.LehrgangNr – @l.Bezeichnung</option>
+                            }
+                        }
+                    </select>
+                </div>
+            </div>
+
+            @* Belegungstyp *@
+            <div class="bc-field">
+                <span class="bc-field-label req">Belegungstyp</span>
+                <span class="bc-field-dots"></span>
+                <div class="bc-field-right bc-field-right-md">
+                    <select name="Form.BelegungsTyp" class="bc-field-ctrl" id="sel-btyp">
+                        @if (Model.Form.BelegungsTyp == 0) { <option value="0" selected>Meisterkurs</option> }
+                        else                               { <option value="0">Meisterkurs</option> }
+                        @if (Model.Form.BelegungsTyp == 1) { <option value="1" selected>Sonderlehrgang</option> }
+                        else                               { <option value="1">Sonderlehrgang</option> }
+                        @if (Model.Form.BelegungsTyp == 2) { <option value="2" selected>Dozent</option> }
+                        else                               { <option value="2">Dozent</option> }
+                    </select>
+                </div>
+            </div>
+
+            @* Zeitraum *@
+            <div class="bc-field">
+                <span class="bc-field-label req">Von</span>
+                <span class="bc-field-dots"></span>
+                <div class="bc-field-right bc-field-right-md">
+                    <input asp-for="Form.Von" type="date" class="bc-field-ctrl" id="inp-von" />
+                </div>
+            </div>
+
+            <div class="bc-field">
+                <span class="bc-field-label req">Bis</span>
+                <span class="bc-field-dots"></span>
+                <div class="bc-field-right bc-field-right-md">
+                    <input asp-for="Form.Bis" type="date" class="bc-field-ctrl" id="inp-bis" />
+                </div>
+            </div>
+
+            @* Kostenart *@
+            <div class="bc-field">
+                <span class="bc-field-label">Kostenart</span>
+                <span class="bc-field-dots"></span>
+                <div class="bc-field-right bc-field-right-md">
+                    <select name="Form.KostenArt" class="bc-field-ctrl" id="sel-kostenart">
+                        @if (Model.Form.KostenArt == 0) { <option value="0" selected>Pauschale</option> }
+                        else                            { <option value="0">Pauschale</option> }
+                        @if (Model.Form.KostenArt == 1) { <option value="1" selected>Individuell</option> }
+                        else                            { <option value="1">Individuell</option> }
+                        @if (Model.Form.KostenArt == 2) { <option value="2" selected>Unentgeltlich</option> }
+                        else                            { <option value="2">Unentgeltlich</option> }
+                    </select>
+                </div>
+            </div>
+
+            @* Kosten *@
+            <div class="bc-field">
+                <span class="bc-field-label">Kosten (€)</span>
+                <span class="bc-field-dots"></span>
+                <div class="bc-field-right bc-field-right-sm">
+                    @if (Model.Form.BelegungsTyp == 2)
+                    {
+                        <input asp-for="Form.Kosten" type="number" step="0.01" min="0"
+                               class="bc-field-ctrl" id="inp-kosten" readonly />
+                    }
+                    else
+                    {
+                        <input asp-for="Form.Kosten" type="number" step="0.01" min="0"
+                               class="bc-field-ctrl" id="inp-kosten" />
+                    }
+                </div>
+            </div>
+
+            @* Notiz *@
+            <div class="bc-field-block bc-field-full">
+                <label class="bc-field-label">Notiz</label>
+                <textarea asp-for="Form.Notiz" class="bc-field-ctrl" rows="2"
+                          style="width:100%;resize:vertical"></textarea>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:16px">
+            <button type="submit" class="bc-btn bc-btn-primary">Speichern</button>
+            <a href="/Internat" class="bc-btn">Abbrechen</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+<script>
+(function() {
+    var selTyp    = document.getElementById('sel-btyp');
+    var selLehrg  = document.getElementById('sel-lehrgang');
+    var inpKosten = document.getElementById('inp-kosten');
+
+    function aktualisiereKosten() {
+        var typ = parseInt(selTyp.value);
+        if (typ === 2) {
+            inpKosten.value    = '0';
+            inpKosten.readOnly = true;
+        } else {
+            inpKosten.readOnly = false;
+        }
+    }
+
+    function lehrgangGewaehlt() {
+        var opt = selLehrg.options[selLehrg.selectedIndex];
+        var geb = opt ? opt.getAttribute('data-gebuehren') : '';
+        if (geb && parseInt(selTyp.value) !== 2) {
+            inpKosten.value = geb;
+        }
+    }
+
+    selTyp.addEventListener('change', aktualisiereKosten);
+    if (selLehrg) selLehrg.addEventListener('change', lehrgangGewaehlt);
+    aktualisiereKosten();
+})();
+</script>
+}

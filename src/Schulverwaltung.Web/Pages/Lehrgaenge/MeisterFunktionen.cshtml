@@ -1,0 +1,103 @@
+@page
+@model Schulverwaltung.Web.Pages.Lehrgaenge.MeisterFunktionenModel
+@{ ViewData["Title"] = "Funktionen"; }
+
+<div class="bc-page">
+    @* Topbar *@
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Lehrgaenge/Karte/@Model.LehrgangId" class="bc-back-btn">&#x2190;</a>
+            <span class="bc-page-badge">Funktionen | @Model.LehrgangNr</span>
+        </div>
+    </div>
+
+    <h1 class="bc-card-title">
+        <span class="bc-title-nr">@Model.LehrgangNr</span>
+        <span class="bc-title-sep"> · </span>
+        <span>Funktionsträger</span>
+    </h1>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+
+    <p class="bc-section-title">Aktuelle Funktionsträger</p>
+    <table class="bc-table" style="width:100%">
+        <thead>
+            <tr>
+                <th>Funktion</th>
+                <th>Person</th>
+                <th style="width:100px">Aktiv seit</th>
+                <th style="width:240px">Neu besetzen</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var f in Model.Funktionen)
+            {
+                <tr>
+                    <td style="font-weight:500">@f.FunktionName</td>
+                    <td>
+                        @if (f.PersonId.HasValue)
+                        {
+                            <a href="#" onclick="openModal('/Personen/Karte/@f.PersonId');return false"
+                               style="color:#00B7C3">@f.PersonName</a>
+                        }
+                        else
+                        {
+                            <span style="color:#a19f9d;font-style:italic">– nicht besetzt –</span>
+                        }
+                    </td>
+                    <td style="font-size:11px;color:#605e5c">
+                        @(f.GueltigAb?.ToString("dd.MM.yyyy") ?? "–")
+                    </td>
+                    <td>
+                        <form method="post" asp-page-handler="FunktionAendern"
+                              style="display:flex;gap:4px">
+                            <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+                            <input type="hidden" name="funktion" value="@f.Funktion" />
+                            <select name="personId" class="bc-field-ctrl" style="height:24px;font-size:11px;flex:1">
+                                <option value="0">– keine –</option>
+                                @foreach (var tn in Model.Teilnehmer)
+                                {
+                                    @if (f.PersonId == tn.PersonId) { <option value="@tn.PersonId" selected>@tn.Name</option> } else { <option value="@tn.PersonId">@tn.Name</option> }
+                                }
+                            </select>
+                            <button type="submit" class="bc-btn bc-btn-primary bc-btn-sm">&#x2714;</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (Model.Verlauf.Any())
+    {
+        <details style="margin-top:16px">
+            <summary style="cursor:pointer;font-size:12px;color:#605e5c;padding:6px 0">
+                Funktionshistorie (@Model.Verlauf.Count Einträge)
+            </summary>
+            <table class="bc-table" style="width:100%;margin-top:8px;font-size:11px">
+                <thead>
+                    <tr>
+                        <th>Funktion</th>
+                        <th>Person</th>
+                        <th style="width:100px">Gültig ab</th>
+                        <th style="width:100px">Gültig bis</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var v in Model.Verlauf.OrderByDescending(x => x.GueltigAb))
+                    {
+                        <tr style="@(v.GueltigBis == null ? "font-weight:500" : "color:#605e5c")">
+                            <td>@v.FunktionName</td>
+                            <td>@v.PersonName</td>
+                            <td>@v.GueltigAb.ToString("dd.MM.yyyy")</td>
+                            <td>@(v.GueltigBis?.ToString("dd.MM.yyyy") ?? "– aktiv –")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </details>
+    }
+</div>

@@ -1,0 +1,1422 @@
+@page "{id:int?}"
+@model Schulverwaltung.Web.Pages.Lehrgaenge.KarteModel
+@using Schulverwaltung.Domain.Enums
+@using System.Globalization
+@{ ViewData["Title"] = Model.Titel; var de = new CultureInfo("de-DE"); }
+
+@functions {
+    static string StatusClass(string text) => text switch {
+        "Planung"         => "bc-badge-planung",
+        "Anmeldung offen" => "bc-badge-offen",
+        "Aktiv"           => "bc-badge-aktiv",
+        "Abgeschlossen"   => "bc-badge-abgeschlossen",
+        "Storniert"       => "bc-badge-storniert",
+        _                 => "bc-badge-planung"
+    };
+    static string LgStatusText(byte s) => s switch {
+        0 => "Planung", 1 => "Anmeldung offen", 2 => "Aktiv",
+        3 => "Abgeschlossen", 4 => "Storniert", _ => ""
+    };
+    static string TypStyle(byte typ) => typ switch {
+        0 => "background:#1F3864;color:#fff",
+        1 => "background:#8764B8;color:#fff",
+        2 => "background:#107C10;color:#fff",
+        3 => "background:#D83B01;color:#fff",
+        4 => "background:#00B7C3;color:#fff",
+        _ => "background:#605e5c;color:#fff"
+    };
+    static string TypText(byte typ) => typ switch {
+        0 => "MEISTERVORBEREITUNG", 1 => "PODOLOGIE",
+        2 => "ÜB. AUSBILDUNG", 3 => "SONDERLEHRGANG OST",
+        4 => "SONDERLEHRGANG PODO.", _ => ""
+    };
+    static string RolleClass(LehrgangPersonRolle r) => r switch {
+        LehrgangPersonRolle.Teilnehmer => "bc-badge-rolle-teilnehmer",
+        LehrgangPersonRolle.Dozent     => "bc-badge-rolle-dozent",
+        LehrgangPersonRolle.Assistent  => "bc-badge-rolle-pruefer",
+        _                              => "bc-badge-planung"
+    };
+    static string PersonStatusClass(string s) => s switch {
+        "Warteliste" => "bc-badge-warteliste",
+        "Angemeldet" => "bc-badge-angemeldet",
+        "Abgemeldet" => "bc-badge-abgemeldet",
+        "Bestanden"  => "bc-badge-bestanden",
+        _            => "bc-badge-planung"
+    };
+    static string EinheitTypText(byte t) => t switch {
+        0 => "Unterricht", 1 => "Prüfung", 2 => "Pause", 3 => "Exkursion", _ => ""
+    };
+    static string EinheitTypStyle(byte t) => t switch {
+        0 => "background:#cce4ff;color:#0078D4",
+        1 => "background:#fff4ce;color:#8a6914",
+        2 => "background:#f3f2f1;color:#605e5c",
+        3 => "background:#dff6dd;color:#107C10",
+        _ => "background:#f3f2f1;color:#605e5c"
+    };
+    static string EreignisStyle(string e) => e switch {
+        "LehrgangAngelegt"    => "background:#dff6dd;color:#107C10",
+        "StammdatenGeaendert" => "background:#cce4ff;color:#0078D4",
+        "StatusGeaendert"     => "background:#fff4ce;color:#8a6914",
+        "PersonHinzugefuegt"  => "background:#dff6dd;color:#107C10",
+        "PersonEntfernt"      => "background:#fde7e9;color:#c50f1f",
+        "EinheitHinzugefuegt" => "background:#dff6dd;color:#107C10",
+        "EinheitGeaendert"    => "background:#cce4ff;color:#0078D4",
+        _                     => "background:#f3f2f1;color:#323130"
+    };
+}
+
+<div class="bc-page" style="max-width:none">
+
+    @if (!ModelState.IsValid)
+    {
+        <div class="bc-alert">
+            @foreach (var e in ModelState.Values.SelectMany(v => v.Errors))
+            { <div>@e.ErrorMessage</div> }
+        </div>
+    }
+
+    @* Topbar *@
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Lehrgaenge" class="bc-back-btn" title="Zurück zu Lehrgänge">&#x2190;</a>
+            <span class="bc-page-badge">Lehrgangs-Karte | Arbeitsdatum: @DateTime.Today.ToString("dd.MM.yyyy")</span>
+        </div>
+        <div class="bc-card-topbar-right">
+            <button type="submit" form="form-speichern" class="bc-icon-btn" title="Speichern">&#x2714;</button>
+            @if (!Model.IstNeu)
+            {
+                <a href="/Lehrgaenge/Karte" class="bc-icon-btn" title="Neuer Lehrgang">+</a>
+                @if (Model.Form.Status == 0)
+                {
+                    <form method="post" asp-page-handler="Loeschen"
+                          onsubmit="return confirm('Lehrgang wirklich löschen?')" style="display:contents">
+                        <input type="hidden" name="id" value="@Model.Form.LehrgangId" />
+                        <button type="submit" class="bc-icon-btn bc-icon-btn-danger" title="Löschen">&#x1F5D1;</button>
+                    </form>
+                }
+            }
+        </div>
+    </div>
+
+    @* Title *@
+    <h1 class="bc-card-title">
+        @if (Model.IstNeu)
+        {
+            <span>Neuer Lehrgang</span>
+        }
+        else
+        {
+            <span class="bc-title-nr">@Model.Form.LehrgangNr</span>
+            <span class="bc-title-sep"> · </span>
+            <span>@Model.Form.Bezeichnung</span>
+            <span style="margin-left:8px;padding:2px 10px;font-size:11px;border-radius:2px;font-weight:600;
+                         @TypStyle(Model.Form.LehrgangTyp)">
+                @TypText(Model.Form.LehrgangTyp)
+            </span>
+            <span class="bc-title-status">
+                <span class="bc-badge @StatusClass(LgStatusText(Model.Form.Status))">@LgStatusText(Model.Form.Status)</span>
+            </span>
+        }
+    </h1>
+
+    @* Modal-Button-Leiste (nur Meisterkurs, wenn gespeichert) *@
+    @if (Model.ZeigeMeisterTabs && !Model.IstNeu)
+    {
+        <div class="bc-meister-btn-strip">
+            <button type="button" class="bc-meister-btn"
+                    onclick="location.href='/Lehrgaenge/Kursmodule?id=@Model.Form.LehrgangId'">
+                <span class="bc-meister-btn-icon">&#9781;</span> Kursmodule
+            </button>
+            <button type="button" class="bc-meister-btn"
+                    onclick="location.href='/Lehrgaenge/FaecherNoten?id=@Model.Form.LehrgangId'">
+                <span class="bc-meister-btn-icon">&#10003;</span> Fächer &amp; Noten
+            </button>
+            <button type="button" class="bc-meister-btn"
+                    onclick="location.href='/Lehrgaenge/MeisterFunktionen?id=@Model.Form.LehrgangId'">
+                <span class="bc-meister-btn-icon">&#9673;</span> Funktionen
+            </button>
+            <button type="button" class="bc-meister-btn"
+                    onclick="location.href='/Lehrgaenge/MeisterInternat?id=@Model.Form.LehrgangId'">
+                <span class="bc-meister-btn-icon">&#9634;</span> Internat
+            </button>
+            <button type="button" class="bc-meister-btn"
+                    onclick="location.href='/Lehrgaenge/Aenderungsprotokoll?id=@Model.Form.LehrgangId'">
+                <span class="bc-meister-btn-icon">&#9776;</span> Änderungsprotokoll
+            </button>
+            <button type="button" class="bc-meister-btn"
+                    onclick="location.href='/Lehrgaenge/MeisterEinladungen?id=@Model.Form.LehrgangId'">
+                <span class="bc-meister-btn-icon">&#9993;</span> Einladungen
+            </button>
+            <div class="bc-meister-dd" id="dok-dd-wrap">
+                <button type="button" class="bc-meister-btn" onclick="toggleDokDropdown()">
+                    <span class="bc-meister-btn-icon">&#9654;</span> Dokumente &#9660;
+                </button>
+                <div class="bc-meister-dd-menu" id="dok-dd-menu">
+                    <a class="bc-meister-dd-item"
+                       onclick="location.href='/Berichte/Vorschau?key=lehrgang-teilnehmerliste&id=@Model.Form.LehrgangId';closeDokDropdown()">
+                        Teilnehmerliste
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Action Tabs – nur für Nicht-Meisterkurs (oder neuer Lehrgang) *@
+    @if (!Model.ZeigeMeisterTabs || Model.IstNeu)
+    {
+    <nav class="bc-action-tabs">
+        <a href="#" class="bc-action-tab active" data-panel="panel-allgemein">Allgemein</a>
+        @if (!Model.IstNeu)
+        {
+            <a href="#" class="bc-action-tab" data-panel="panel-personen">Personen (@Model.ZugeordnetePersonen.Count)</a>
+            @if (Model.ZeigeEinheiten)
+            {
+                <a href="#" class="bc-action-tab" data-panel="panel-einheiten">Einheiten (@Model.Einheiten.Count)</a>
+            }
+            <a href="#" class="bc-action-tab" data-panel="panel-protokoll">Änderungsprotokoll (@Model.Aenderungsposten.Count)</a>
+            <a href="#" class="bc-action-tab" data-panel="panel-aktionen">Aktionen</a>
+        }
+    </nav>
+    }
+
+    @* 75/25 Layout *@
+    <div style="display:flex;gap:16px;align-items:flex-start">
+
+        @* ── LINKE SEITE ────────────────────────────────────────────────────── *@
+        <div style="flex:3;min-width:0">
+
+        @if (Model.ZeigeMeisterTabs && !Model.IstNeu)
+        {
+            @* ════════════════════════════════════════════════════════════════
+               MEISTERKURS-LAYOUT: 4 vertikale Sektionen
+               ════════════════════════════════════════════════════════════════ *@
+            <form id="form-speichern" method="post" asp-page-handler="Speichern">
+                <input type="hidden" asp-for="Form.LehrgangId" />
+                <input type="hidden" asp-for="Form.LehrgangTyp" />
+
+                @* ── 1. Allgemein ─────────────────────────────────────────── *@
+                <div class="bc-meister-section">
+                    <p class="bc-section-title">1. Allgemein</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field">
+                            <span class="bc-field-label">Nr.</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input class="bc-field-ctrl" value="@Model.Form.LehrgangNr" readonly />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Typ</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input class="bc-field-ctrl" value="@TypText(Model.Form.LehrgangTyp)" readonly />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label req">Bezeichnung</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Bezeichnung" class="bc-field-ctrl" />
+                                <span asp-validation-for="Form.Bezeichnung" class="bc-field-err"></span>
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Langbezeichnung</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.BezeichnungLang" class="bc-field-ctrl" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label req">Startdatum</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.StartDatum" class="bc-field-ctrl" type="date" />
+                                <span asp-validation-for="Form.StartDatum" class="bc-field-err"></span>
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Enddatum</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.EndDatum" class="bc-field-ctrl" type="date" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Min. Teilnehmer</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-sm">
+                                <input asp-for="Form.MinTeilnehmer" class="bc-field-ctrl" type="number" min="0" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Max. Teilnehmer</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-sm">
+                                <input asp-for="Form.MaxTeilnehmer" class="bc-field-ctrl" type="number" min="0" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Lehrgangsart</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <select asp-for="Form.ArtId" class="bc-field-ctrl">
+                                    <option value="">– keine –</option>
+                                    @foreach (var art in Model.LehrgangArten)
+                                    {
+                                        <option value="@art.ArtId">@art.Bezeichnung</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Status</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input class="bc-field-ctrl" value="@LgStatusText(Model.Form.Status)" readonly />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* ── 3. Kosten ────────────────────────────────────────────── *@
+                <div class="bc-meister-section">
+                    <p class="bc-section-title">3. Kosten</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field">
+                            <span class="bc-field-label">Lehrgangskosten</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.KostenLehrgang" class="bc-field-ctrl" type="number"
+                                       step="0.01" min="0" />
+                            </div>
+                        </div>
+                        <div></div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Internat Doppelzimmer</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.KostenInternatDZ" class="bc-field-ctrl" type="number"
+                                       step="0.01" min="0" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Internat Einzelzimmer</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.KostenInternatEZ" class="bc-field-ctrl" type="number"
+                                       step="0.01" min="0" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Höhe Grundzahlung</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.GrundzahlungBetrag" class="bc-field-ctrl" type="number"
+                                       step="0.01" min="0" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Termin Grundzahlung</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.GrundzahlungTermin" class="bc-field-ctrl" type="date" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Beginn Abbuchung</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.BeginnAbbuchung" class="bc-field-ctrl" type="date" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Anzahl Raten</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-sm">
+                                <input asp-for="Form.AnzahlRaten" class="bc-field-ctrl" type="number" min="1" max="60"
+                                       placeholder="6" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Kaution Werkstatt</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.KautionWerkstatt" class="bc-field-ctrl" type="number"
+                                       step="0.01" min="0" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Kaution Internat</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.KautionInternat" class="bc-field-ctrl" type="number"
+                                       step="0.01" min="0" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Verwaltungspauschale</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.Verwaltungspauschale" class="bc-field-ctrl" type="number"
+                                       step="0.01" min="0" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            @* ── 2. Teilnehmer ────────────────────────────────────────────── *@
+            <div class="bc-meister-section">
+                <p class="bc-section-title">2. Teilnehmer</p>
+                @{
+                    var meisterTeilnehmer = Model.ZugeordnetePersonen
+                        .Where(p => p.Rolle == LehrgangPersonRolle.Teilnehmer)
+                        .ToList();
+                }
+
+                @* Teilnehmer hinzufügen *@
+                <form method="post" asp-page-handler="PersonHinzufuegen"
+                      style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+                    <input type="hidden" name="id" value="@Model.Form.LehrgangId" />
+                    <input type="hidden" name="rolle" value="0" />
+                    <select name="personId" id="mk-sel-person" class="bc-field-ctrl" style="width:280px">
+                        <option value="">– Teilnehmer wählen –</option>
+                        @foreach (var item in Model.PersonenAuswahl.Items.Where(i => i.RolleTyp == 0))
+                        {
+                            <option value="@item.PersonId">@item.Text</option>
+                        }
+                    </select>
+                    <button type="submit" class="bc-btn bc-btn-primary">+ Hinzufügen</button>
+                </form>
+
+                <table class="bc-table" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>Nr.</th><th>Name</th><th>Status</th>
+                            <th>Betrieb</th><th class="col-date">Angemeldet</th>
+                            <th style="width:36px"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in meisterTeilnehmer)
+                        {
+                            <tr style="cursor:pointer"
+                                onclick="openModal('/Personen/Karte/@p.PersonId')">
+                                <td>@p.PersonNr</td>
+                                <td>@p.Nachname, @p.Vorname</td>
+                                <td><span class="bc-badge @PersonStatusClass(p.StatusText)">@p.StatusText</span></td>
+                                <td style="font-size:12px;color:#605e5c">@(p.BetriebName ?? "–")</td>
+                                <td class="col-date">@p.AnmeldungsDatum.ToString("dd.MM.yyyy")</td>
+                                <td onclick="event.stopPropagation()">
+                                    <form method="post" asp-page-handler="PersonEntfernen"
+                                          onsubmit="return confirm('Teilnehmer entfernen?')">
+                                        <input type="hidden" name="id" value="@Model.Form.LehrgangId" />
+                                        <input type="hidden" name="personId" value="@p.PersonId" />
+                                        <input type="hidden" name="rolle" value="0" />
+                                        <button class="bc-btn-remove">&#x2715;</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                        @if (!meisterTeilnehmer.Any())
+                        {
+                            <tr><td colspan="6" style="text-align:center;color:#a19f9d;padding:12px">
+                                Noch keine Teilnehmer zugeordnet
+                            </td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @* ── 4. Aktionen ──────────────────────────────────────────────── *@
+            <div class="bc-meister-section">
+                <p class="bc-section-title">4. Aktionen</p>
+                <div class="bc-actions-section">
+                    <h6>Status ändern</h6>
+                    <form method="post" asp-page-handler="Status"
+                          asp-route-id="@Model.Form.LehrgangId" class="bc-actions-row">
+                        @{ var mkSelStat = Model.Form.Status; }
+                        <select name="neuerStatus" class="bc-field-ctrl" style="width:200px">
+                            @if (mkSelStat == 0) { <option value="0" selected>Planung</option> } else { <option value="0">Planung</option> }
+                            @if (mkSelStat == 1) { <option value="1" selected>Anmeldung offen</option> } else { <option value="1">Anmeldung offen</option> }
+                            @if (mkSelStat == 2) { <option value="2" selected>Aktiv</option> } else { <option value="2">Aktiv</option> }
+                            @if (mkSelStat == 3) { <option value="3" selected>Abgeschlossen</option> } else { <option value="3">Abgeschlossen</option> }
+                        </select>
+                        <button type="submit" class="bc-btn bc-btn-primary">Übernehmen</button>
+                    </form>
+                </div>
+                @if (Model.Form.Status == 0 || Model.Form.Status == 1)
+                {
+                    <div class="bc-actions-section">
+                        <h6>Lehrgang absagen</h6>
+                        <div class="bc-actions-row">
+                            <form method="post" asp-page-handler="Absagen"
+                                  onsubmit="return confirm('Lehrgang wirklich absagen?')">
+                                <input type="hidden" name="id" value="@Model.Form.LehrgangId" />
+                                <button type="submit" class="bc-btn bc-btn-danger">Absagen (→ Storniert)</button>
+                            </form>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            @* ════════════════════════════════════════════════════════════════
+               STANDARD-LAYOUT: Tab-Panels (alle anderen Typen + neuer Lehrgang)
+               ════════════════════════════════════════════════════════════════ *@
+
+            @* Panel: Allgemein *@
+            <div id="panel-allgemein" class="bc-tab-panel active">
+                <form id="form-speichern" method="post" asp-page-handler="Speichern">
+                    <input type="hidden" asp-for="Form.LehrgangId" />
+                    @if (!Model.IstNeu) { <input type="hidden" asp-for="Form.LehrgangTyp" /> }
+
+                    <p class="bc-section-title">Stammdaten</p>
+                    <div class="bc-fields-2col">
+                        @* Linke Spalte *@
+                        @if (!Model.IstNeu)
+                        {
+                            <div class="bc-field">
+                                <span class="bc-field-label">Nr.</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right bc-field-right-md">
+                                    <input class="bc-field-ctrl" value="@Model.Form.LehrgangNr" readonly />
+                                </div>
+                            </div>
+                        }
+                        <div class="bc-field">
+                            <span class="bc-field-label">Typ</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                @if (Model.IstNeu)
+                                {
+                                    <select asp-for="Form.LehrgangTyp" class="bc-field-ctrl">
+                                        <option value="0">Meistervorbereitung</option>
+                                        <option value="1">Podologie</option>
+                                        <option value="2">Üb. Ausbildung</option>
+                                        <option value="3">Sonderlehrgang OST</option>
+                                        <option value="4">Sonderlehrgang Podologie</option>
+                                    </select>
+                                }
+                                else
+                                {
+                                    <input class="bc-field-ctrl" value="@TypText(Model.Form.LehrgangTyp)" readonly />
+                                }
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label req">Bezeichnung</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input asp-for="Form.Bezeichnung" class="bc-field-ctrl" />
+                                <span asp-validation-for="Form.Bezeichnung" class="bc-field-err"></span>
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Lehrgangsart</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <select asp-for="Form.ArtId" class="bc-field-ctrl">
+                                    <option value="">– keine –</option>
+                                    @foreach (var art in Model.LehrgangArten)
+                                    {
+                                        <option value="@art.ArtId">@art.Bezeichnung</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="bc-field bc-field-full">
+                            <span class="bc-field-label">Bezeichnung (lang)</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <textarea asp-for="Form.BezeichnungLang" class="bc-field-ctrl" rows="2"
+                                          style="width:100%;resize:vertical"></textarea>
+                            </div>
+                        </div>
+
+                        @* Rechte Spalte – Zeitraum & Kapazität *@
+                        <div class="bc-field">
+                            <span class="bc-field-label req">Startdatum</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.StartDatum" class="bc-field-ctrl" type="date" />
+                                <span asp-validation-for="Form.StartDatum" class="bc-field-err"></span>
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Enddatum</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input asp-for="Form.EndDatum" class="bc-field-ctrl" type="date" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Min. / Max. TN</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right" style="display:flex;gap:6px">
+                                <input asp-for="Form.MinTeilnehmer" class="bc-field-ctrl bc-field-right-sm"
+                                       type="number" min="0" placeholder="Min" />
+                                <input asp-for="Form.MaxTeilnehmer" class="bc-field-ctrl bc-field-right-sm"
+                                       type="number" min="0" placeholder="Max" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Gebühren</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md" style="display:flex;align-items:center;gap:4px">
+                                <input asp-for="Form.Gebuehren" class="bc-field-ctrl" type="number"
+                                       step="0.01" min="0" style="text-align:right;flex:1" />
+                                <span style="font-size:12px;color:#605e5c">€</span>
+                            </div>
+                        </div>
+                        @if (!Model.IstNeu)
+                        {
+                            <div class="bc-field">
+                                <span class="bc-field-label">Status</span>
+                                <span class="bc-field-dots"></span>
+                                <div class="bc-field-right bc-field-right-md">
+                                    <input class="bc-field-ctrl" value="@LgStatusText(Model.Form.Status)" readonly />
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <p class="bc-section-title">Beschreibung &amp; Notizen</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field-full bc-field-block">
+                            <span class="bc-field-label">Beschreibung</span>
+                            <textarea asp-for="Form.Beschreibung" class="bc-field-ctrl" rows="3"
+                                      style="width:100%;resize:vertical"></textarea>
+                        </div>
+                        <div class="bc-field-full bc-field-block">
+                            <span class="bc-field-label">Notiz (intern)</span>
+                            <textarea asp-for="Form.Notiz" class="bc-field-ctrl" rows="2"
+                                      style="width:100%;resize:vertical"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            @if (!Model.IstNeu)
+            {
+                @* Panel: Personen *@
+                <div id="panel-personen" class="bc-tab-panel">
+                    <table class="bc-table" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>Nr.</th><th>Name</th><th>Rolle</th>
+                                <th>Status</th><th>Betrieb</th>
+                                <th class="col-date">Angemeldet</th>
+                                <th class="col-num">Std.</th>
+                                <th style="width:36px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in Model.ZugeordnetePersonen)
+                            {
+                                <tr style="cursor:pointer" onclick="location.href='/Personen/Karte/@p.PersonId'">
+                                    <td>@p.PersonNr</td>
+                                    <td>@p.Nachname, @p.Vorname</td>
+                                    <td><span class="bc-badge @RolleClass(p.Rolle)">@p.RolleText</span></td>
+                                    <td><span class="bc-badge @PersonStatusClass(p.StatusText)">@p.StatusText</span></td>
+                                    <td style="font-size:12px;color:#605e5c">@(p.BetriebName ?? "–")</td>
+                                    <td class="col-date">@p.AnmeldungsDatum.ToString("dd.MM.yyyy")</td>
+                                    <td class="col-num">@(p.GeplanteStunden?.ToString("0.0") ?? "–")</td>
+                                    <td onclick="event.stopPropagation()">
+                                        <form method="post" asp-page-handler="PersonEntfernen"
+                                              onsubmit="return confirm('Person entfernen?')">
+                                            <input type="hidden" name="id" value="@Model.Form.LehrgangId" />
+                                            <input type="hidden" name="personId" value="@p.PersonId" />
+                                            <input type="hidden" name="rolle" value="@((byte)p.Rolle)" />
+                                            <button class="bc-btn-remove">&#x2715;</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                            @if (!Model.ZugeordnetePersonen.Any())
+                            {
+                                <tr><td colspan="8" style="text-align:center;color:#a19f9d;padding:12px">
+                                    Noch keine Personen zugeordnet
+                                </td></tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <form method="post" asp-page-handler="PersonHinzufuegen" class="bc-add-row" id="form-person-add"
+                          style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                        <input type="hidden" name="id" value="@Model.Form.LehrgangId" />
+                        <select name="rolle" id="sel-rolle" class="bc-field-ctrl" style="width:120px"
+                                onchange="filterPersonen(this.value)">
+                            <option value="0">Teilnehmer</option>
+                            <option value="1">Dozent</option>
+                            <option value="2">Assistent</option>
+                            <option value="3">Gast</option>
+                        </select>
+                        <select name="personId" id="sel-person" class="bc-field-ctrl" style="width:280px">
+                            <option value="">– Person wählen –</option>
+                            @foreach (var item in Model.PersonenAuswahl.Items)
+                            {
+                                <option value="@item.PersonId" data-rolle="@item.RolleTyp">@item.Text</option>
+                            }
+                        </select>
+                        <button type="submit" class="bc-btn bc-btn-primary">+ Hinzufügen</button>
+                    </form>
+                </div>
+
+                @* Panel: Einheiten *@
+                @if (Model.ZeigeEinheiten)
+                {
+                <div id="panel-einheiten" class="bc-tab-panel">
+                    <table class="bc-table" style="width:100%" id="einheiten-table">
+                        <thead>
+                            <tr>
+                                <th class="col-date">Datum</th>
+                                <th style="width:80px">Von</th>
+                                <th style="width:80px">Bis</th>
+                                <th style="width:90px">Typ</th>
+                                <th>Thema</th>
+                                <th>Dozent</th>
+                                <th>Raum</th>
+                                <th style="width:70px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var e in Model.Einheiten)
+                            {
+                                <tr data-einheit-id="@e.EinheitId"
+                                    data-datum="@e.Datum.ToString("yyyy-MM-dd")"
+                                    data-von="@(e.UhrzeitVon?.ToString("HH:mm") ?? "")"
+                                    data-bis="@(e.UhrzeitBis?.ToString("HH:mm") ?? "")"
+                                    data-typ="@e.EinheitTyp"
+                                    data-thema="@e.Thema"
+                                    data-dozent="@(e.DozentPersonId?.ToString() ?? "")"
+                                    data-raum="@(e.Raum ?? "")"
+                                    data-reihenfolge="@e.Reihenfolge"
+                                    data-notiz="@(e.Notiz ?? "")">
+                                    <td class="col-date">@e.Datum.ToString("dd.MM.yyyy")</td>
+                                    <td>@(e.UhrzeitVon?.ToString("HH:mm") ?? "–")</td>
+                                    <td>@(e.UhrzeitBis?.ToString("HH:mm") ?? "–")</td>
+                                    <td>
+                                        <span style="@EinheitTypStyle(e.EinheitTyp);padding:1px 6px;font-size:11px;border-radius:2px">
+                                            @EinheitTypText(e.EinheitTyp)
+                                        </span>
+                                    </td>
+                                    <td>@e.Thema</td>
+                                    <td style="font-size:12px;color:#605e5c">@(e.DozentName ?? "–")</td>
+                                    <td style="font-size:12px;color:#605e5c">@(e.Raum ?? "–")</td>
+                                    <td style="white-space:nowrap">
+                                        <button type="button" class="bc-btn-remove"
+                                                onclick="editEinheit(this.closest('tr'))"
+                                                title="Bearbeiten" style="color:#0078D4;border-color:#0078D4">✎</button>
+                                        <form method="post" asp-page-handler="EinheitLoeschen" style="display:inline"
+                                              onsubmit="return confirm('Einheit löschen?')">
+                                            <input type="hidden" name="einheitId" value="@e.EinheitId" />
+                                            <input type="hidden" name="lehrgangId" value="@Model.Form.LehrgangId" />
+                                            <button type="submit" class="bc-btn-remove">&#x2715;</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                            @if (!Model.Einheiten.Any())
+                            {
+                                <tr><td colspan="8" style="text-align:center;color:#a19f9d;padding:12px">
+                                    Noch keine Einheiten angelegt
+                                </td></tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    @* Einheit hinzufügen / bearbeiten *@
+                    <div style="margin-top:12px;padding:8px;background:#f9f8f7;border:1px solid #e1dfdd">
+                        <p class="bc-section-title" id="einheit-form-title" style="margin:0 0 8px 0">Neue Einheit</p>
+                        <form method="post" asp-page-handler="EinheitSpeichern"
+                              style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end">
+                            <input type="hidden" asp-for="EinheitForm.EinheitId" />
+                            <input type="hidden" asp-for="EinheitForm.LehrgangId" value="@Model.Form.LehrgangId" />
+                            <div>
+                                <div style="font-size:11px;color:#605e5c;margin-bottom:2px">Datum*</div>
+                                <input asp-for="EinheitForm.Datum" type="date" class="bc-field-ctrl bc-field-right-md" />
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:#605e5c;margin-bottom:2px">Von</div>
+                                <input asp-for="EinheitForm.UhrzeitVon" type="time" class="bc-field-ctrl" style="width:80px" />
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:#605e5c;margin-bottom:2px">Bis</div>
+                                <input asp-for="EinheitForm.UhrzeitBis" type="time" class="bc-field-ctrl" style="width:80px" />
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:#605e5c;margin-bottom:2px">Typ</div>
+                                <select asp-for="EinheitForm.EinheitTyp" class="bc-field-ctrl" style="width:110px">
+                                    <option value="0">Unterricht</option>
+                                    <option value="1">Prüfung</option>
+                                    <option value="2">Pause</option>
+                                    <option value="3">Exkursion</option>
+                                </select>
+                            </div>
+                            <div style="flex:1;min-width:180px">
+                                <div style="font-size:11px;color:#605e5c;margin-bottom:2px">Thema*</div>
+                                <input asp-for="EinheitForm.Thema" class="bc-field-ctrl" style="width:100%" placeholder="Thema eingeben..." />
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:#605e5c;margin-bottom:2px">Dozent</div>
+                                <select asp-for="EinheitForm.DozentPersonId" class="bc-field-ctrl" style="width:180px">
+                                    <option value="">– kein –</option>
+                                    @foreach (var d in Model.DozentenListe)
+                                    {
+                                        <option value="@d.PersonId">@d.AnzeigeName</option>
+                                    }
+                                </select>
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:#605e5c;margin-bottom:2px">Raum</div>
+                                <input asp-for="EinheitForm.RaumBezeichnung" class="bc-field-ctrl bc-field-right-md" placeholder="Raum" />
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:#605e5c;margin-bottom:2px">Reihenfolge</div>
+                                <input asp-for="EinheitForm.Reihenfolge" type="number" class="bc-field-ctrl" style="width:60px" />
+                            </div>
+                            <div style="display:flex;gap:4px;align-items:flex-end">
+                                <button type="submit" class="bc-btn bc-btn-primary">Speichern</button>
+                                <button type="button" class="bc-btn" onclick="resetEinheitForm()">Neu</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                } @* end ZeigeEinheiten *@
+
+                @* Panel: Änderungsprotokoll *@
+                <div id="panel-protokoll" class="bc-tab-panel">
+                    <table class="bc-table" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>Beleg-Nr.</th><th>Ereignis</th><th>Feld</th>
+                                <th>Alter Wert</th><th>Neuer Wert</th>
+                                <th>Zeitstempel</th><th>Benutzer</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var ap in Model.Aenderungsposten)
+                            {
+                                <tr>
+                                    <td><small style="color:#605e5c">@ap.BelegNr</small></td>
+                                    <td>
+                                        <span style="padding:1px 6px;border-radius:2px;font-size:11px;@EreignisStyle(ap.Ereignis)">
+                                            @ap.Ereignis
+                                        </span>
+                                    </td>
+                                    <td>@(ap.Feld ?? "–")</td>
+                                    <td style="color:#a19f9d">@(ap.AlterWert ?? "–")</td>
+                                    <td>@(ap.NeuerWert ?? "–")</td>
+                                    <td style="white-space:nowrap">
+                                        <small>@ap.Zeitstempel.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small>
+                                    </td>
+                                    <td><small>@ap.User</small></td>
+                                </tr>
+                            }
+                            @if (!Model.Aenderungsposten.Any())
+                            {
+                                <tr><td colspan="7" style="text-align:center;color:#a19f9d;padding:12px">
+                                    Keine Änderungen protokolliert
+                                </td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @* ── MEISTERKURS PANELS (nur Typ=0) ─────────────────────────────────── *@
+                @if (Model.ZeigeMeisterTabs)
+                {
+                    @* Panel: Abschnitte *@
+                    <div id="panel-abschnitte" class="bc-tab-panel">
+                        <table class="bc-table" style="width:100%">
+                            <thead>
+                                <tr>
+                                    <th style="width:40px">Nr.</th>
+                                    <th>Bezeichnung</th>
+                                    <th style="width:130px">Typ</th>
+                                    <th style="width:110px">Status</th>
+                                    <th style="width:90px;text-align:center">Zuord.</th>
+                                    <th style="width:130px"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var a in Model.MeisterAbschnitte)
+                                {
+                                    var typStyle = a.AbschnittTyp switch {
+                                        0 => "background:#cce4ff;color:#0078D4",
+                                        1 => "background:#c7f0e9;color:#00604A",
+                                        2 => "background:#1F3864;color:#fff",
+                                        _ => "background:#f3f2f1;color:#605e5c"
+                                    };
+                                    var typText = a.AbschnittTyp switch {
+                                        0 => "Vorbereitung", 1 => "Patientenversorgung", 2 => "Meisterprüfung", _ => ""
+                                    };
+                                    var statStyle = a.Status switch {
+                                        0 => "background:#f3f2f1;color:#605e5c",
+                                        1 => "background:#dff6dd;color:#107C10",
+                                        2 => "background:#323130;color:#fff",
+                                        _ => ""
+                                    };
+                                    var statText = a.Status switch { 0 => "Geplant", 1 => "Aktiv", 2 => "Abgeschlossen", _ => "" };
+                                    <tr>
+                                        <td style="text-align:center;font-weight:600">@a.Nummer</td>
+                                        <td>
+                                            <form method="post" asp-page-handler="AbschnittSpeichern" style="display:flex;gap:4px">
+                                                <input type="hidden" name="abschnittId" value="@a.AbschnittId" />
+                                                <input type="hidden" name="lehrgangId" value="@Model.Form.LehrgangId" />
+                                                <input name="bezeichnung" value="@a.Bezeichnung" class="bc-field-ctrl" style="flex:1" />
+                                                <input type="hidden" name="status" value="@a.Status" class="abschnitt-status-hidden-@a.AbschnittId" />
+                                                <button type="submit" class="bc-btn bc-btn-primary bc-btn-sm">✔</button>
+                                            </form>
+                                        </td>
+                                        <td><span style="@typStyle;padding:1px 6px;font-size:11px;border-radius:2px">@typText</span></td>
+                                        <td>
+                                            <form method="post" asp-page-handler="AbschnittSpeichern" style="display:flex;gap:4px">
+                                                <input type="hidden" name="abschnittId" value="@a.AbschnittId" />
+                                                <input type="hidden" name="lehrgangId" value="@Model.Form.LehrgangId" />
+                                                <input type="hidden" name="bezeichnung" value="@a.Bezeichnung" />
+                                                <select name="status" class="bc-field-ctrl" style="height:24px;font-size:11px">
+                                                    @if (a.Status == 0) { <option value="0" selected>Geplant</option> } else { <option value="0">Geplant</option> }
+                                                    @if (a.Status == 1) { <option value="1" selected>Aktiv</option> } else { <option value="1">Aktiv</option> }
+                                                    @if (a.Status == 2) { <option value="2" selected>Abgeschlossen</option> } else { <option value="2">Abgeschlossen</option> }
+                                                </select>
+                                                <button type="submit" class="bc-btn bc-btn-sm">✔</button>
+                                            </form>
+                                        </td>
+                                        <td style="text-align:center">
+                                            @if (a.AnzahlZuordnungen > 0)
+                                            {
+                                                <span style="color:#00B7C3;font-weight:600">@a.AnzahlZuordnungen</span>
+                                            }
+                                            else { <span style="color:#a19f9d">–</span> }
+                                        </td>
+                                        <td>
+                                            @if (a.AbschnittTyp >= 1)
+                                            {
+                                                <a href="/Lehrgaenge/MeisterPatientenversorgung?lehrgangId=@Model.Form.LehrgangId&abschnittId=@a.AbschnittId"
+                                                   class="bc-btn bc-btn-sm" style="font-size:11px">Patienten ↗</a>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                                @if (!Model.MeisterAbschnitte.Any())
+                                {
+                                    <tr><td colspan="6" style="text-align:center;color:#a19f9d;padding:12px">
+                                        Keine Abschnitte angelegt. Lehrgang als Meisterkurs gespeichert?
+                                    </td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @* Panel: Fächer & Noten *@
+                    <div id="panel-faecher" class="bc-tab-panel">
+                        @* Aktions-Buttons oben *@
+                        <div style="display:flex;gap:8px;margin-bottom:16px">
+                            <a href="/Lehrgaenge/MeisterFaecher?lehrgangId=@Model.Form.LehrgangId" class="bc-btn">
+                                Fächer verwalten →
+                            </a>
+                            <a href="/Lehrgaenge/MeisterNotenFach?lehrgangId=@Model.Form.LehrgangId" class="bc-btn bc-btn-primary">
+                                Noten eintragen (nach Fach) →
+                            </a>
+                        </div>
+
+                        @* Notenübersicht (Matrix) *@
+                        @{
+                            var notenPersonen = Model.MeisterNotenMatrix.Values.OrderBy(p => p.PersonName).ToList();
+                        }
+                        @if (notenPersonen.Any() && Model.MeisterFaecher.Any())
+                        {
+                            <div style="overflow-x:auto">
+                                <table class="bc-table" style="font-size:11px;min-width:600px">
+                                    <thead>
+                                        <tr>
+                                            <th style="min-width:150px">Teilnehmer</th>
+                                            @foreach (var f in Model.MeisterFaecher)
+                                            {
+                                                <th style="min-width:55px;text-align:center;writing-mode:vertical-rl;height:80px;white-space:nowrap">
+                                                    @f.Bezeichnung
+                                                </th>
+                                            }
+                                            <th style="min-width:65px;text-align:center">Gesamt</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var pr in notenPersonen)
+                                        {
+                                            <tr>
+                                                <td style="font-size:11px">
+                                                    <a href="/Lehrgaenge/MeisterNotenTeilnehmer?lehrgangId=@Model.Form.LehrgangId&personId=@pr.PersonId"
+                                                       style="color:#00B7C3;text-decoration:none">@pr.PersonName</a>
+                                                </td>
+                                                @foreach (var f in Model.MeisterFaecher)
+                                                {
+                                                    var note = pr.FachNoten.TryGetValue(f.FachId, out var n) ? n : null;
+                                                    var noteStyle = note?.Note switch {
+                                                        1 or 2 => "background:#dff6dd;color:#107C10",
+                                                        3 or 4 => "background:#fff4ce;color:#8a6914",
+                                                        5 or 6 => "background:#fde7e9;color:#c50f1f",
+                                                        _       => "background:#f3f2f1;color:#a19f9d;font-style:italic"
+                                                    };
+                                                    <td style="text-align:center;padding:2px">
+                                                        <span style="@noteStyle;display:inline-block;width:36px;padding:1px 0;font-size:11px;font-weight:600">
+                                                            @(note?.Note?.ToString() ?? "–")
+                                                        </span>
+                                                    </td>
+                                                }
+                                                <td style="text-align:center;font-weight:700;color:@(pr.Gesamtnote.HasValue ? "#1F3864" : "#a19f9d")">
+                                                    @(pr.Gesamtnote?.ToString("0.0") ?? "–")
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p style="color:#a19f9d;text-align:center;padding:16px">
+                                Noch keine Noten vorhanden. Fächer anlegen und Teilnehmer zuordnen.
+                            </p>
+                        }
+                    </div>
+
+                    @* Panel: Funktionen *@
+                    <div id="panel-funktionen" class="bc-tab-panel">
+                        <p class="bc-section-title">Aktuelle Funktionsträger</p>
+                        <table class="bc-table" style="width:100%">
+                            <thead>
+                                <tr>
+                                    <th>Funktion</th>
+                                    <th>Person</th>
+                                    <th style="width:100px">Aktiv seit</th>
+                                    <th style="width:200px">Ändern</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var f in Model.MeisterFunktionen)
+                                {
+                                    <tr>
+                                        <td style="font-weight:500">@f.FunktionName</td>
+                                        <td>
+                                            @if (f.PersonId.HasValue)
+                                            {
+                                                <a href="/Personen/Karte/@f.PersonId" style="color:#00B7C3">@f.PersonName</a>
+                                            }
+                                            else
+                                            {
+                                                <span style="color:#a19f9d;font-style:italic">– nicht besetzt –</span>
+                                            }
+                                        </td>
+                                        <td style="font-size:11px;color:#605e5c">
+                                            @(f.GueltigAb?.ToString("dd.MM.yyyy") ?? "–")
+                                        </td>
+                                        <td>
+                                            <form method="post" asp-page-handler="FunktionAendern" style="display:flex;gap:4px">
+                                                <input type="hidden" name="lehrgangId" value="@Model.Form.LehrgangId" />
+                                                <input type="hidden" name="funktion" value="@f.Funktion" />
+                                                <select name="personId" class="bc-field-ctrl" style="height:24px;font-size:11px;flex:1">
+                                                    <option value="0">– keine –</option>
+                                                    @foreach (var tn in Model.MeisterTeilnehmerListe)
+                                                    {
+                                                        <option value="@tn.PersonId">@tn.Name</option>
+                                                    }
+                                                </select>
+                                                <button type="submit" class="bc-btn bc-btn-sm bc-btn-primary">✔</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+
+                        <details style="margin-top:12px">
+                            <summary style="cursor:pointer;font-size:12px;color:#605e5c">Funktionshistorie</summary>
+                            <p style="color:#a19f9d;font-size:12px;padding:8px">
+                                Wird nach dem nächsten Speichern geladen.
+                            </p>
+                        </details>
+                    </div>
+
+                    @* Panel: Patientenversorgungen *@
+                    <div id="panel-pv" class="bc-tab-panel">
+                        <p class="bc-section-title">Übersicht Patientenversorgungen &amp; Prüfung</p>
+                        @foreach (var pv in Model.MeisterPVUebersicht)
+                        {
+                            var typColor = pv.AbschnittTyp == 1 ? "#00604A" : "#1F3864";
+                            <div style="border:1px solid #e1dfdd;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+                                <div>
+                                    <strong style="color:@typColor">@pv.Nummer. @pv.Bezeichnung</strong>
+                                    <span style="margin-left:12px;font-size:12px;color:#605e5c">
+                                        @pv.Gesamt Zuordnung(en) &nbsp;|&nbsp;
+                                        <span style="color:#0078D4">@pv.Bestaetigt bestätigt</span> &nbsp;|&nbsp;
+                                        <span style="color:#107C10">@pv.Gebucht gebucht</span>
+                                    </span>
+                                </div>
+                                <a href="/Lehrgaenge/MeisterPatientenversorgung?lehrgangId=@Model.Form.LehrgangId&abschnittId=@pv.AbschnittId"
+                                   class="bc-btn bc-btn-sm">Abschnitt öffnen ↗</a>
+                            </div>
+                        }
+                        @if (!Model.MeisterPVUebersicht.Any())
+                        {
+                            <p style="color:#a19f9d;text-align:center;padding:16px">
+                                Keine Patientenversorgungen vorhanden.
+                            </p>
+                        }
+                    </div>
+
+                    @* Panel: Internat *@
+                    <div id="panel-internat" class="bc-tab-panel">
+                        <div style="padding:16px 0">
+                            <p class="bc-section-title">INTERNAT-BELEGUNGEN</p>
+                            <div style="display:flex;gap:8px;margin-bottom:12px">
+                                <a href="/Internat/Belegung" class="bc-btn bc-btn-primary">+ Neue Belegung</a>
+                                <a href="/Internat" class="bc-btn">Belegungsplan öffnen ↗</a>
+                            </div>
+                            <p style="color:#605e5c;font-size:12px">
+                                Internat-Belegungen für diesen Lehrgang werden über den Belegungsplan verwaltet.
+                            </p>
+                        </div>
+                    </div>
+                }
+
+                @* Panel: Aktionen *@
+                <div id="panel-aktionen" class="bc-tab-panel">
+
+                    @* ── Dokumente ── *@
+                    @if (!Model.IstNeu)
+                    {
+                        <div class="bc-actions-section">
+                            <h6>Dokumente</h6>
+                            <table style="width:100%;border-collapse:collapse">
+                                <tr>
+                                    <td style="padding:4px 0;font-size:13px">Teilnehmerliste</td>
+                                    <td style="padding:4px 0;text-align:right">
+                                        <button class="bc-btn bc-btn-sm"
+                                                onclick="openModal('/Berichte/Vorschau?key=lehrgang-teilnehmerliste&id=@Model.Form.LehrgangId')">
+                                            Vorschau
+                                        </button>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    }
+
+                    <div class="bc-actions-section">
+                        <h6>Status ändern</h6>
+                        <form method="post" asp-page-handler="Status"
+                              asp-route-id="@Model.Form.LehrgangId" class="bc-actions-row">
+                            @{ var selStat = Model.Form.Status; }
+                            <select name="neuerStatus" class="bc-field-ctrl" style="width:200px">
+                                @if (selStat == 0) { <option value="0" selected>Planung</option> } else { <option value="0">Planung</option> }
+                                @if (selStat == 1) { <option value="1" selected>Anmeldung offen</option> } else { <option value="1">Anmeldung offen</option> }
+                                @if (selStat == 2) { <option value="2" selected>Aktiv</option> } else { <option value="2">Aktiv</option> }
+                                @if (selStat == 3) { <option value="3" selected>Abgeschlossen</option> } else { <option value="3">Abgeschlossen</option> }
+                            </select>
+                            <button type="submit" class="bc-btn bc-btn-primary">Übernehmen</button>
+                        </form>
+                    </div>
+                    @if (Model.Form.Status == 0 || Model.Form.Status == 1)
+                    {
+                        <div class="bc-actions-section">
+                            <h6>Lehrgang absagen</h6>
+                            <div class="bc-actions-row">
+                                <form method="post" asp-page-handler="Absagen"
+                                      onsubmit="return confirm('Lehrgang wirklich absagen?')">
+                                    <input type="hidden" name="id" value="@Model.Form.LehrgangId" />
+                                    <button type="submit" class="bc-btn bc-btn-danger">Absagen (→ Storniert)</button>
+                                </form>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        } @* end else Standard-Layout *@
+
+        </div>
+
+        @* ── RECHTE SEITE – nur bei bestehenden Lehrgängen ───────────────────── *@
+        @if (!Model.IstNeu)
+        {
+            <div style="flex:1;min-width:280px">
+                <div class="bc-side-container">
+                    <div class="bc-side-tabs">
+                        <a href="#" class="bc-side-tab active" data-side="side-details">Details</a>
+                        <a href="#" class="bc-side-tab" data-side="side-anhaenge">
+                            Anhänge (@Model.Anhaenge.Count)
+                        </a>
+                    </div>
+
+                    <div id="side-details" class="bc-side-panel active">
+                        <p class="bc-stat-section-title">ÜBERSICHT</p>
+                        <div class="bc-stat-row">
+                            <span class="bc-stat-desc">Lehrgangsart</span>
+                            <span class="bc-stat-val" style="font-size:11px">
+                                @(Model.LehrgangArten.FirstOrDefault(a => a.ArtId == Model.Form.ArtId)?.Bezeichnung ?? "–")
+                            </span>
+                        </div>
+                        @if (Model.Form.Gebuehren.HasValue)
+                        {
+                            <div class="bc-stat-row">
+                                <span class="bc-stat-desc">Gebühren</span>
+                                <span style="color:#00B7C3;font-weight:600;font-size:14px">
+                                    @Model.Form.Gebuehren.Value.ToString("N2", de) €
+                                </span>
+                            </div>
+                        }
+                        <div class="bc-stat-row">
+                            <span class="bc-stat-desc">Min / Max TN</span>
+                            <span class="bc-stat-val">@Model.Form.MinTeilnehmer / @(Model.Form.MaxTeilnehmer == 0 ? "∞" : Model.Form.MaxTeilnehmer.ToString())</span>
+                        </div>
+
+                        <p class="bc-stat-section-title" style="margin-top:10px">PERSONEN</p>
+                        <div class="bc-stat-row">
+                            <span class="bc-stat-desc">Angemeldete TN</span>
+                            <span class="bc-stat-val" style="color:#00B7C3;font-weight:600">@Model.Statistik.AnzahlTeilnehmer</span>
+                        </div>
+                        @if (Model.Statistik.AnzahlWarteliste > 0)
+                        {
+                            <div class="bc-stat-row">
+                                <span class="bc-stat-desc">Warteliste</span>
+                                <span class="bc-stat-val" style="color:#D83B01">@Model.Statistik.AnzahlWarteliste</span>
+                            </div>
+                        }
+                        <div class="bc-stat-row">
+                            <span class="bc-stat-desc">Dozenten</span>
+                            <span class="bc-stat-val">@Model.Statistik.AnzahlDozenten</span>
+                        </div>
+                        @if (Model.Form.MaxTeilnehmer > 0)
+                        {
+                            var freiRot = Model.Statistik.FreiePlaetze < Model.Form.MinTeilnehmer;
+                            <div class="bc-stat-row">
+                                <span class="bc-stat-desc">Freie Plätze</span>
+                                <span class="bc-stat-val" style="@(freiRot ? "color:#c50f1f;font-weight:600" : "")">
+                                    @Model.Statistik.FreiePlaetze
+                                </span>
+                            </div>
+                        }
+
+                        <p class="bc-stat-section-title" style="margin-top:10px">EINHEITEN</p>
+                        <div class="bc-stat-row">
+                            <span class="bc-stat-desc">Einheiten gesamt</span>
+                            <span class="bc-stat-val">@Model.Statistik.AnzahlEinheiten</span>
+                        </div>
+                        <div class="bc-stat-row">
+                            <span class="bc-stat-desc">Geplante Stunden</span>
+                            <span class="bc-stat-val">@Model.Statistik.GesamtStunden.ToString("0.0") h</span>
+                        </div>
+                        @if (Model.Statistik.NaechstesEinheitDatum.HasValue)
+                        {
+                            <div class="bc-stat-row">
+                                <span class="bc-stat-desc">Nächste Einheit</span>
+                                <span class="bc-stat-val" style="font-size:11px;text-align:right;max-width:120px">
+                                    @Model.Statistik.NaechstesEinheitDatum.Value.ToString("dd.MM.yyyy")<br />
+                                    <small style="color:#605e5c">@Model.Statistik.NaechstesEinheitThema</small>
+                                </span>
+                            </div>
+                        }
+                    </div>
+
+                    <div id="side-anhaenge" class="bc-side-panel">
+                        <div class="bc-anhang-upload">
+                            <form method="post" asp-page-handler="AnhangHochladen" enctype="multipart/form-data">
+                                <input type="hidden" name="lehrgangId" value="@Model.Form.LehrgangId" />
+                                <div style="margin-bottom:4px">
+                                    <input name="bezeichnung" class="bc-field-ctrl"
+                                           placeholder="Bezeichnung" style="width:100%;margin-bottom:4px" />
+                                    <input type="file" name="datei" class="bc-field-ctrl"
+                                           style="width:100%;margin-bottom:4px" />
+                                </div>
+                                <button type="submit" class="bc-anhang-btn" style="width:100%">↑ Hochladen</button>
+                            </form>
+                        </div>
+                        @if (Model.Anhaenge.Any())
+                        {
+                            <table class="bc-anhang-table">
+                                <thead><tr><th>Bezeichnung</th><th>Größe</th><th></th></tr></thead>
+                                <tbody>
+                                    @foreach (var a in Model.Anhaenge)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a href="/Lehrgaenge/Karte?handler=Anhang&id=@a.AnhangId"
+                                                   class="bc-anhang-link" title="@a.DateiName">@a.Bezeichnung</a>
+                                            </td>
+                                            <td style="white-space:nowrap">
+                                                @(a.DateiGroesse > 1024*1024 ? $"{a.DateiGroesse/1024/1024:F1} MB" : $"{a.DateiGroesse/1024:F0} KB")
+                                            </td>
+                                            <td>
+                                                <form method="post" asp-page-handler="AnhangLoeschen"
+                                                      onsubmit="return confirm('Anhang löschen?')" style="display:inline">
+                                                    <input type="hidden" name="anhangId" value="@a.AnhangId" />
+                                                    <input type="hidden" name="lehrgangId" value="@Model.Form.LehrgangId" />
+                                                    <button type="submit" class="bc-anhang-btn"
+                                                            style="border-color:#d83b01;color:#d83b01">✕</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                        else
+                        {
+                            <p style="color:#a19f9d;font-size:12px;text-align:center;margin-top:12px">
+                                Noch keine Anhänge vorhanden.
+                            </p>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+    </div>@* end 75/25 *@
+
+</div>@* end bc-page *@
+
+@section Scripts {
+<script>
+// Meisterkurs: Dokumente-Dropdown
+function toggleDokDropdown() {
+    var menu = document.getElementById('dok-dd-menu');
+    if (!menu) return;
+    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+}
+function closeDokDropdown() {
+    var menu = document.getElementById('dok-dd-menu');
+    if (menu) menu.style.display = 'none';
+}
+document.addEventListener('click', function(e) {
+    var wrap = document.getElementById('dok-dd-wrap');
+    if (wrap && !wrap.contains(e.target)) closeDokDropdown();
+});
+
+(function () {
+    // FastTabs
+    var tabs = document.querySelectorAll('.bc-action-tab');
+    var panels = document.querySelectorAll('.bc-tab-panel');
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function (e) {
+            e.preventDefault();
+            tabs.forEach(function (t) { t.classList.remove('active'); });
+            panels.forEach(function (p) { p.classList.remove('active'); });
+            tab.classList.add('active');
+            var panel = document.getElementById(tab.dataset.panel);
+            if (panel) panel.classList.add('active');
+        });
+    });
+
+    // Side-Tabs
+    var sideTabs = document.querySelectorAll('.bc-side-tab');
+    var sidePanels = document.querySelectorAll('.bc-side-panel');
+    sideTabs.forEach(function (tab) {
+        tab.addEventListener('click', function (e) {
+            e.preventDefault();
+            sideTabs.forEach(function (t) { t.classList.remove('active'); });
+            sidePanels.forEach(function (p) { p.classList.remove('active'); });
+            tab.classList.add('active');
+            var panel = document.getElementById(tab.dataset.side);
+            if (panel) panel.classList.add('active');
+        });
+    });
+})();
+
+// Personen-Filter
+function filterPersonen(rolle) {
+    var sel = document.getElementById('sel-person');
+    if (!sel) return;
+    Array.from(sel.options).forEach(function (opt) {
+        if (!opt.value) { opt.hidden = false; return; }
+        var rt = opt.dataset.rolle;
+        if (rolle === '3') opt.hidden = false;
+        else if (rolle === '0') opt.hidden = rt !== '0';
+        else opt.hidden = rt !== '1';
+    });
+    sel.value = '';
+}
+document.addEventListener('DOMContentLoaded', function () {
+    var sr = document.getElementById('sel-rolle');
+    if (sr) filterPersonen(sr.value);
+});
+
+// Meisterkurs Sub-Tabs (Fächer & Noten)
+document.querySelectorAll('[data-subtab]').forEach(function(tab) {
+    tab.addEventListener('click', function(e) {
+        e.preventDefault();
+        document.querySelectorAll('[data-subtab]').forEach(function(t) { t.classList.remove('active'); });
+        document.querySelectorAll('.meister-subtab').forEach(function(p) { p.style.display = 'none'; });
+        tab.classList.add('active');
+        var target = document.getElementById(tab.dataset.subtab);
+        if (target) target.style.display = '';
+    });
+});
+
+// Note-Modal
+function openNoteModal(noteId, fach, person, aktuelleNote) {
+    document.getElementById('note-modal-id').value = noteId;
+    document.getElementById('note-modal-title').textContent = 'Note: ' + fach + ' – ' + person;
+    var sel = document.getElementById('note-modal-note');
+    if (sel && aktuelleNote > 0) sel.value = aktuelleNote;
+    document.getElementById('note-modal').style.display = 'flex';
+}
+document.getElementById('note-modal')?.addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+});
+
+// Einheiten: Inline-Bearbeiten
+function editEinheit(row) {
+    var d = row.dataset;
+    var f = document.querySelector('form[action*="EinheitSpeichern"]') ||
+            document.querySelector('form[method="post"]');
+    var form = document.querySelector('#panel-einheiten form[method="post"]:last-of-type') ||
+               document.getElementById('einheit-speichern-form');
+
+    // Find the einheit form by looking for EinheitForm.EinheitId
+    var inputs = document.querySelectorAll('#panel-einheiten input, #panel-einheiten select');
+    function setVal(name, val) {
+        var el = document.querySelector('#panel-einheiten [name="' + name + '"]');
+        if (el) el.value = val || '';
+    }
+    setVal('EinheitForm.EinheitId', d.einheitId);
+    setVal('EinheitForm.Datum', d.datum);
+    setVal('EinheitForm.UhrzeitVon', d.von);
+    setVal('EinheitForm.UhrzeitBis', d.bis);
+    setVal('EinheitForm.EinheitTyp', d.typ);
+    setVal('EinheitForm.Thema', d.thema);
+    setVal('EinheitForm.DozentPersonId', d.dozent);
+    setVal('EinheitForm.RaumBezeichnung', d.raum);
+    setVal('EinheitForm.Reihenfolge', d.reihenfolge);
+    setVal('EinheitForm.Notiz', d.notiz);
+
+    var title = document.getElementById('einheit-form-title');
+    if (title) title.textContent = 'Einheit bearbeiten';
+
+    // Scroll to form
+    var formArea = document.querySelector('#panel-einheiten > div:last-child');
+    if (formArea) formArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function resetEinheitForm() {
+    function setVal(name, val) {
+        var el = document.querySelector('#panel-einheiten [name="' + name + '"]');
+        if (el) el.value = val || '';
+    }
+    setVal('EinheitForm.EinheitId', '0');
+    setVal('EinheitForm.Datum', '');
+    setVal('EinheitForm.UhrzeitVon', '');
+    setVal('EinheitForm.UhrzeitBis', '');
+    setVal('EinheitForm.EinheitTyp', '0');
+    setVal('EinheitForm.Thema', '');
+    setVal('EinheitForm.DozentPersonId', '');
+    setVal('EinheitForm.RaumBezeichnung', '');
+    setVal('EinheitForm.Reihenfolge', '0');
+    setVal('EinheitForm.Notiz', '');
+    var title = document.getElementById('einheit-form-title');
+    if (title) title.textContent = 'Neue Einheit';
+}
+</script>
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+}

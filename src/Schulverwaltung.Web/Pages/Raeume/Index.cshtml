@@ -1,0 +1,162 @@
+@page
+@model Schulverwaltung.Web.Pages.Raeume.IndexModel
+@{ ViewData["Title"] = "Räume"; }
+
+<div class="bc-page">
+    <h1 class="bc-page-title">Räume</h1>
+
+    <div class="bc-action-bar">
+        @if (Model.DarfBearbeiten)
+        {
+            <a class="bc-btn bc-btn-primary" href="/Raeume/Karte">+ Neuer Raum</a>
+            <span class="bc-sep"></span>
+        }
+        <form method="get" style="display:contents">
+            <select name="FilterTyp" class="bc-field-ctrl" style="width:auto;height:28px" onchange="this.form.submit()">
+                @if (!Model.FilterTyp.HasValue) { <option value="" selected>Alle Typen</option> } else { <option value="">Alle Typen</option> }
+                @foreach (var t in Model.RaumTypen)
+                {
+                    if (Model.FilterTyp == t.RaumTypId) { <option value="@t.RaumTypId" selected>@t.Bezeichnung</option> }
+                    else { <option value="@t.RaumTypId">@t.Bezeichnung</option> }
+                }
+            </select>
+            <select name="FilterStatus" class="bc-field-ctrl" style="width:auto;height:28px" onchange="this.form.submit()">
+                @if (string.IsNullOrEmpty(Model.FilterStatus)) { <option value="" selected>Alle</option> } else { <option value="">Alle</option> }
+                @if (Model.FilterStatus == "aktiv") { <option value="aktiv" selected>Nur aktive</option> } else { <option value="aktiv">Nur aktive</option> }
+                @if (Model.FilterStatus == "gesperrt") { <option value="gesperrt" selected>Nur gesperrte</option> } else { <option value="gesperrt">Nur gesperrte</option> }
+            </select>
+        </form>
+        <input type="search" id="bc-search" class="bc-search" placeholder="Suchen..." value="@Model.Suche" autocomplete="off" />
+        <span class="bc-entry-count" id="entry-count"></span>
+    </div>
+
+    <div class="bc-list-layout">
+        <div class="bc-list-main">
+            <div class="bc-table-wrap">
+                <table class="bc-table" id="bc-table">
+                    <thead>
+                        <tr>
+                            <th class="col-nr">Nr.</th>
+                            <th>Bezeichnung</th>
+                            <th style="width:140px">Typ</th>
+                            <th class="col-num">Kapazität</th>
+                            <th class="col-num">Inventar</th>
+                            <th style="width:90px">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Model.Raeume)
+                        {
+                            <tr class="bc-row-link @(r.Gesperrt ? "bc-row-gesperrt" : "")"
+                                data-id="@r.RaumId"
+                                data-url="/Raeume/Karte/@r.RaumId"
+                                data-nr="@r.RaumNr"
+                                data-name="@r.Bezeichnung"
+                                data-typ="@r.TypBezeichnung"
+                                data-kap="@(r.Kapazitaet?.ToString() ?? "–")"
+                                data-inventar="@r.AnzahlInventar"
+                                data-internat="@(r.IstInternat ? "Ja" : "")"
+                                data-gesperrt="@(r.Gesperrt ? "Ja" : "")">
+                                <td class="col-nr"><a href="/Raeume/Karte/@r.RaumId" onclick="openModalWithNav(this.href);return false">@r.RaumNr</a></td>
+                                <td>@r.Bezeichnung</td>
+                                <td>
+                                    @r.TypBezeichnung
+                                    @if (r.IstInternat)
+                                    {
+                                        <span class="bc-badge" style="background:#e0f3f3;color:#006360;font-size:10px;margin-left:4px">Internat</span>
+                                    }
+                                </td>
+                                <td class="col-num">@(r.Kapazitaet?.ToString() ?? "–")</td>
+                                <td class="col-num" style="color:#605e5c">@r.AnzahlInventar</td>
+                                <td>
+                                    @if (r.Gesperrt)
+                                    {
+                                        <span style="color:#c50f1f;font-size:11px">&#9888; Gesperrt</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="color:#107C10;font-size:11px">&#9679; Aktiv</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (!Model.Raeume.Any())
+                        {
+                            <tr><td colspan="6" style="text-align:center;color:#a19f9d;padding:16px">Keine Räume vorhanden.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="bc-factbox" id="bc-factbox">
+            <div class="bc-factbox-header">Details</div>
+            <div class="bc-factbox-body" id="bc-factbox-body">
+                <p class="bc-factbox-empty">Zeile auswählen…</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    var table   = document.getElementById('bc-table');
+    var fbBody  = document.getElementById('bc-factbox-body');
+    var search  = document.getElementById('bc-search');
+    var countEl = document.getElementById('entry-count');
+    var allRows = table ? Array.from(table.querySelectorAll('tbody tr[data-id]')) : [];
+    var sel     = null;
+
+    function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function frow(l, v) {
+        return '<div class="bc-factbox-row"><span class="bc-factbox-label">' + l + '</span>'
+             + '<span class="bc-factbox-value">' + esc(v) + '</span></div>';
+    }
+
+    function buildFactbox(d) {
+        var badges = '';
+        if (d.internat) badges += '<span class="bc-badge" style="background:#e0f3f3;color:#006360;font-size:10px">Internat</span> ';
+        if (d.gesperrt) badges += '<span class="bc-badge bc-badge-gesperrt" style="font-size:10px">Gesperrt</span>';
+        return '<div class="bc-factbox-title">' + esc(d.name) + '</div>'
+             + '<div class="bc-factbox-nr">' + esc(d.nr) + '</div>'
+             + (badges ? '<div class="bc-factbox-badges">' + badges + '</div>' : '')
+             + frow('Typ', d.typ)
+             + frow('Kapazität', d.kap)
+             + frow('Inventar', d.inventar + ' Gegenstände')
+             + '<button class="bc-factbox-open" onclick="openModalWithNav(\'/Raeume/Karte/' + esc(d.id) + '\')">Karte öffnen ↗</button>';
+    }
+
+    function openModalWithNav(url) {
+        var vis = allRows.filter(function(r) { return !r.hidden; });
+        var idx = vis.findIndex(function(r) { return r.dataset.url === url; });
+        openModal(url, vis.map(function(r) { return r.dataset.url; }), idx);
+    }
+
+    allRows.forEach(function (tr) {
+        tr.addEventListener('click', function () {
+            if (sel) sel.classList.remove('bc-row-selected');
+            tr.classList.add('bc-row-selected');
+            sel = tr;
+            if (fbBody) fbBody.innerHTML = buildFactbox(tr.dataset);
+        });
+        tr.addEventListener('dblclick', function () { openModalWithNav(tr.dataset.url); });
+    });
+
+    if (search) {
+        search.addEventListener('input', function () {
+            var q = this.value.toLowerCase();
+            allRows.forEach(function (tr) { tr.hidden = q.length > 0 && !tr.textContent.toLowerCase().includes(q); });
+            updateCount();
+        });
+    }
+
+    function updateCount() {
+        var vis = allRows.filter(function (r) { return !r.hidden; }).length;
+        if (countEl) countEl.textContent = vis === allRows.length
+            ? allRows.length + ' Räume'
+            : vis + ' von ' + allRows.length + ' Räumen';
+    }
+    updateCount();
+})();
+</script>
+}

@@ -1,0 +1,61 @@
+@page
+@model Schulverwaltung.Web.Pages.Lehrgaenge.MeisterEinladungDruckModel
+@{ Layout = null; }
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8" />
+    <title>Seriendruck – @Model.LehrgangNr</title>
+    <style>
+        body { font-family: Segoe UI, Arial, sans-serif; font-size: 12pt; margin: 0; padding: 0; }
+        .seite { page-break-after: always; padding: 2cm; max-width: 21cm; box-sizing: border-box; }
+        .seite:last-child { page-break-after: avoid; }
+        .zahlungsplan { padding: 12px 16px; background: #f9f9f9; border-left: 3px solid #1F3864; margin-bottom: 16px; }
+        .internat { padding: 12px 16px; background: #f0f8ff; border-left: 3px solid #0078D4; margin-bottom: 16px; }
+        table { border-collapse: collapse; }
+        th, td { padding: 4px 10px; }
+        .no-print { display: none; }
+        @@media screen {
+            body { background: #e0e0e0; }
+            .seite { background: #fff; margin: 24px auto; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+            .no-print { display: block; text-align: center; padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="no-print">
+    <button onclick="window.print()" style="padding:8px 20px;font-size:14px;cursor:pointer">
+        &#x1F5A8; Alle @Model.Dokumente.Count Einladungen drucken
+    </button>
+    <a href="/Lehrgaenge/MeisterEinladungen?id=@Model.Id"
+       style="margin-left:16px;font-size:13px;color:#0078D4">&#x2190; Zurück zur Liste</a>
+</div>
+
+@foreach (var dok in Model.Dokumente)
+{
+    <div class="seite">
+        @if (!string.IsNullOrEmpty(dok.Anschreiben))
+        {
+            <div style="margin-bottom:16px">@Html.Raw(dok.Anschreiben)</div>
+        }
+        @if (!string.IsNullOrEmpty(dok.Zahlungsplan))
+        {
+            <div class="zahlungsplan">@Html.Raw(dok.Zahlungsplan)</div>
+        }
+        @if (!string.IsNullOrEmpty(dok.Internat))
+        {
+            <div class="internat">@Html.Raw(dok.Internat)</div>
+        }
+        @if (!string.IsNullOrEmpty(dok.Ratenplan))
+        {
+            <div style="margin-bottom:16px">@Html.Raw(dok.Ratenplan)</div>
+        }
+        @if (!string.IsNullOrEmpty(dok.Schlusstext))
+        {
+            <div style="margin-top:24px">@Html.Raw(dok.Schlusstext)</div>
+        }
+    </div>
+}
+</body>
+</html>

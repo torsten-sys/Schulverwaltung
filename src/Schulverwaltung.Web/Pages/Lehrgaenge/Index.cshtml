@@ -1,0 +1,216 @@
+@page
+@model Schulverwaltung.Web.Pages.Lehrgaenge.IndexModel
+@using System.Globalization
+@{ ViewData["Title"] = "Lehrgänge"; var de = new CultureInfo("de-DE"); }
+
+@functions {
+    static string StatusClass(string text) => text switch {
+        "Planung"         => "bc-badge-planung",
+        "Anmeldung offen" => "bc-badge-offen",
+        "Aktiv"           => "bc-badge-aktiv",
+        "Abgeschlossen"   => "bc-badge-abgeschlossen",
+        "Storniert"       => "bc-badge-storniert",
+        _                 => "bc-badge-planung"
+    };
+    static string TypStyle(byte typ) => typ switch {
+        0 => "background:#1F3864;color:#fff",
+        1 => "background:#8764B8;color:#fff",
+        2 => "background:#107C10;color:#fff",
+        3 => "background:#D83B01;color:#fff",
+        4 => "background:#00B7C3;color:#fff",
+        _ => "background:#605e5c;color:#fff"
+    };
+    static string TypText(byte typ) => typ switch {
+        0 => "Meistervorb.",
+        1 => "Podologie",
+        2 => "Üb. Ausbildung",
+        3 => "SL OST",
+        4 => "SL Podo.",
+        _ => ""
+    };
+}
+
+<div class="bc-page">
+    <h1 class="bc-page-title">Lehrgänge</h1>
+
+    <div class="bc-action-bar">
+        @if (Model.DarfBearbeiten)
+        {
+            <a class="bc-btn bc-btn-primary" href="/Lehrgaenge/Karte">+ Neuer Lehrgang</a>
+            <span class="bc-sep"></span>
+        }
+        <form method="get" style="display:contents">
+            @{ var selTyp = Model.TypFilter ?? ""; var selStatus = Model.StatusFilter ?? ""; }
+            <select name="TypFilter" class="bc-field-ctrl" style="width:auto;height:28px" onchange="this.form.submit()">
+                @if (selTyp == "") { <option value="" selected>Alle Typen</option> } else { <option value="">Alle Typen</option> }
+                @if (selTyp == "0") { <option value="0" selected>Meistervorbereitung</option> } else { <option value="0">Meistervorbereitung</option> }
+                @if (selTyp == "1") { <option value="1" selected>Podologie</option> } else { <option value="1">Podologie</option> }
+                @if (selTyp == "2") { <option value="2" selected>Üb. Ausbildung</option> } else { <option value="2">Üb. Ausbildung</option> }
+                @if (selTyp == "3") { <option value="3" selected>Sonderlehrgang OST</option> } else { <option value="3">Sonderlehrgang OST</option> }
+                @if (selTyp == "4") { <option value="4" selected>Sonderlehrgang Podo.</option> } else { <option value="4">Sonderlehrgang Podo.</option> }
+            </select>
+            <select name="StatusFilter" class="bc-field-ctrl" style="width:auto;height:28px" onchange="this.form.submit()">
+                @if (selStatus == "") { <option value="" selected>Alle Status</option> } else { <option value="">Alle Status</option> }
+                @if (selStatus == "0") { <option value="0" selected>Planung</option> } else { <option value="0">Planung</option> }
+                @if (selStatus == "1") { <option value="1" selected>Anmeldung offen</option> } else { <option value="1">Anmeldung offen</option> }
+                @if (selStatus == "2") { <option value="2" selected>Aktiv</option> } else { <option value="2">Aktiv</option> }
+                @if (selStatus == "3") { <option value="3" selected>Abgeschlossen</option> } else { <option value="3">Abgeschlossen</option> }
+                @if (selStatus == "4") { <option value="4" selected>Storniert</option> } else { <option value="4">Storniert</option> }
+            </select>
+            <select name="ArtFilter" class="bc-field-ctrl" style="width:auto;height:28px" onchange="this.form.submit()">
+                @if (!Model.ArtFilter.HasValue) { <option value="" selected>Alle Arten</option> } else { <option value="">Alle Arten</option> }
+                @foreach (var art in Model.LehrgangArten)
+                {
+                    if (Model.ArtFilter == art.ArtId) { <option value="@art.ArtId" selected>@art.Bezeichnung</option> }
+                    else { <option value="@art.ArtId">@art.Bezeichnung</option> }
+                }
+            </select>
+        </form>
+        <input type="search" id="bc-search" class="bc-search" placeholder="Suchen (Nr, Bezeichnung)..."
+               value="@Model.Suche" autocomplete="off" />
+        <span class="bc-entry-count" id="entry-count"></span>
+    </div>
+
+    <div class="bc-list-layout">
+        <div class="bc-list-main">
+            <div class="bc-table-wrap">
+                <table class="bc-table" id="bc-table">
+                    <thead>
+                        <tr>
+                            <th class="col-nr">Nr.</th>
+                            <th style="width:95px">Typ</th>
+                            <th>Bezeichnung</th>
+                            <th style="width:90px">Art</th>
+                            <th class="col-date">Start</th>
+                            <th class="col-date">Ende</th>
+                            <th class="col-num">Min/Max TN</th>
+                            <th class="col-num">Gebühren</th>
+                            <th>Status</th>
+                            <th class="col-num">Personen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in Model.Lehrgaenge)
+                        {
+                            <tr class="bc-row-link @(l.Status == 4 ? "bc-row-gesperrt" : "")"
+                                data-id="@l.LehrgangId"
+                                data-url="/Lehrgaenge/Karte/@l.LehrgangId"
+                                data-nr="@l.LehrgangNr"
+                                data-name="@l.Bezeichnung"
+                                data-typ-idx="@l.LehrgangTyp"
+                                data-typ="@TypText(l.LehrgangTyp)"
+                                data-status="@l.StatusText"
+                                data-status-cls="@StatusClass(l.StatusText)"
+                                data-start="@l.StartDatum.ToString("dd.MM.yyyy")"
+                                data-ende="@(l.EndDatum?.ToString("dd.MM.yyyy") ?? "–")"
+                                data-tn="@l.AnzahlTeilnehmer"
+                                data-gebuehren="@(l.Gebuehren.HasValue ? l.Gebuehren.Value.ToString("N2", de) + " €" : "–")">
+                                <td class="col-nr"><a href="/Lehrgaenge/Karte/@l.LehrgangId" onclick="openModalWithNav(this.href);return false">@l.LehrgangNr</a></td>
+                                <td>
+                                    <span style="@TypStyle(l.LehrgangTyp);padding:1px 6px;font-size:11px;border-radius:2px;white-space:nowrap">
+                                        @TypText(l.LehrgangTyp)
+                                    </span>
+                                </td>
+                                <td>@l.Bezeichnung</td>
+                                <td style="color:#605e5c;font-size:12px">@(l.ArtBezeichnung ?? "–")</td>
+                                <td class="col-date">@l.StartDatum.ToString("dd.MM.yyyy")</td>
+                                <td class="col-date">@(l.EndDatum?.ToString("dd.MM.yyyy") ?? "–")</td>
+                                <td class="col-num">@l.MinTeilnehmer / @(l.MaxTeilnehmer == 0 ? "∞" : l.MaxTeilnehmer.ToString())</td>
+                                <td class="col-num">
+                                    @(l.Gebuehren.HasValue ? l.Gebuehren.Value.ToString("N2", de) + " €" : "–")
+                                </td>
+                                <td><span class="bc-badge @StatusClass(l.StatusText)">@l.StatusText</span></td>
+                                <td class="col-num">
+                                    @l.AnzahlTeilnehmer TN
+                                    @if (l.AnzahlDozenten > 0) { <span style="color:#605e5c"> / @l.AnzahlDozenten Do.</span> }
+                                </td>
+                            </tr>
+                        }
+                        @if (!Model.Lehrgaenge.Any())
+                        {
+                            <tr><td colspan="10" style="text-align:center;color:#a19f9d;padding:16px">Keine Lehrgänge gefunden</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="bc-factbox" id="bc-factbox">
+            <div class="bc-factbox-header">Details</div>
+            <div class="bc-factbox-body" id="bc-factbox-body">
+                <p class="bc-factbox-empty">Zeile auswählen…</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    var table   = document.getElementById('bc-table');
+    var fbBody  = document.getElementById('bc-factbox-body');
+    var search  = document.getElementById('bc-search');
+    var countEl = document.getElementById('entry-count');
+    var allRows = table ? Array.from(table.querySelectorAll('tbody tr[data-id]')) : [];
+    var sel     = null;
+
+    var TYPFARBEN = ['#1F3864', '#8764B8', '#107C10', '#D83B01', '#00B7C3'];
+
+    function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function frow(l, v) {
+        return '<div class="bc-factbox-row"><span class="bc-factbox-label">' + l + '</span>'
+             + '<span class="bc-factbox-value">' + esc(v) + '</span></div>';
+    }
+
+    function buildFactbox(d) {
+        var farbe = TYPFARBEN[parseInt(d.typIdx)] || '#605e5c';
+        var typBadge = '<span style="background:' + farbe + ';color:#fff;padding:1px 6px;font-size:10px;border-radius:2px">' + esc(d.typ) + '</span>';
+        var statusBadge = '<span class="bc-badge ' + esc(d.statusCls) + '">' + esc(d.status) + '</span>';
+        return '<div class="bc-factbox-title">' + esc(d.name) + '</div>'
+             + '<div class="bc-factbox-nr">' + esc(d.nr) + '</div>'
+             + '<div class="bc-factbox-badges">' + typBadge + ' ' + statusBadge + '</div>'
+             + frow('Start', d.start) + frow('Ende', d.ende)
+             + frow('Teilnehmer', d.tn) + frow('Gebühren', d.gebuehren)
+             + '<button class="bc-factbox-open" onclick="openModalWithNav(\'/Lehrgaenge/Karte/' + esc(d.id) + '\')">Karte öffnen ↗</button>';
+    }
+
+    function openModalWithNav(url) {
+        var vis = allRows.filter(function(r) { return !r.hidden; });
+        var idx = vis.findIndex(function(r) { return r.dataset.url === url; });
+        openModal(url, vis.map(function(r) { return r.dataset.url; }), idx);
+    }
+
+    allRows.forEach(function (tr) {
+        tr.addEventListener('click', function () {
+            if (sel) sel.classList.remove('bc-row-selected');
+            tr.classList.add('bc-row-selected');
+            sel = tr;
+            if (fbBody) fbBody.innerHTML = buildFactbox(tr.dataset);
+        });
+        tr.addEventListener('dblclick', function () { openModalWithNav(tr.dataset.url); });
+    });
+
+    if (search) {
+        search.addEventListener('input', function () {
+            var q = this.value.toLowerCase();
+            allRows.forEach(function (tr) { tr.hidden = q.length > 0 && !tr.textContent.toLowerCase().includes(q); });
+            updateCount();
+        });
+        search.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                var url = new URL(window.location.href);
+                url.searchParams.set('Suche', this.value);
+                window.location.href = url.toString();
+            }
+        });
+    }
+
+    function updateCount() {
+        var vis = allRows.filter(function (r) { return !r.hidden; }).length;
+        if (countEl) countEl.textContent = vis === allRows.length
+            ? allRows.length + ' Lehrgänge'
+            : vis + ' von ' + allRows.length + ' Lehrgängen';
+    }
+    updateCount();
+})();
+</script>
+}

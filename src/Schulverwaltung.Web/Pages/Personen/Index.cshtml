@@ -1,0 +1,175 @@
+@page
+@model Schulverwaltung.Web.Pages.Personen.IndexModel
+@using Schulverwaltung.Domain.Entities
+@{ ViewData["Title"] = "Personen"; }
+
+@functions {
+    string RolleClass(PersonRolleTyp r) => r switch {
+        PersonRolleTyp.Teilnehmer      => "bc-badge-rolle-teilnehmer",
+        PersonRolleTyp.Dozent          => "bc-badge-rolle-dozent",
+        PersonRolleTyp.Patient         => "bc-badge-rolle-patient",
+        PersonRolleTyp.Ansprechpartner => "bc-badge-rolle-ansprechpartner",
+        PersonRolleTyp.Pruefer         => "bc-badge-rolle-pruefer",
+        PersonRolleTyp.Betreuer        => "bc-badge-rolle-betreuer",
+        _                              => "bc-badge-planung"
+    };
+    string RolleText(PersonRolleTyp r) => r switch {
+        PersonRolleTyp.Teilnehmer      => "Teilnehmer",
+        PersonRolleTyp.Dozent          => "Dozent",
+        PersonRolleTyp.Patient         => "Patient",
+        PersonRolleTyp.Ansprechpartner => "Ansprechpartner",
+        PersonRolleTyp.Pruefer         => "Prüfer",
+        PersonRolleTyp.Betreuer        => "Betreuer",
+        _                              => r.ToString()
+    };
+}
+
+<div class="bc-page">
+    <h1 class="bc-page-title">Personen</h1>
+
+    <div class="bc-action-bar">
+        @if (Model.DarfBearbeiten)
+        {
+            <button class="bc-btn bc-btn-primary" onclick="openModal('/Personen/Karte')">+ Neu</button>
+            <span class="bc-sep"></span>
+        }
+        <form method="get" style="display:contents">
+            <input name="suche" value="@Model.Suche" id="bc-search" class="bc-search"
+                   style="width:200px" placeholder="Name, Nr., E-Mail..." autocomplete="off" />
+            <select name="rolleFilter" class="bc-field-ctrl" style="width:auto;height:28px">
+                <option value="">– Alle Rollen –</option>
+                @foreach (var (val, label) in new[] {
+                    ("0","Teilnehmer"),("1","Dozent"),("2","Patient"),
+                    ("3","Ansprechpartner"),("4","Prüfer"),("5","Betreuer") })
+                {
+                    if (Model.RolleFilter == val)
+                    { <option value="@val" selected>@label</option> }
+                    else
+                    { <option value="@val">@label</option> }
+                }
+            </select>
+            <button type="submit" class="bc-btn">Filtern</button>
+        </form>
+        <span class="bc-entry-count" id="entry-count"></span>
+    </div>
+
+    <div class="bc-list-layout">
+        <div class="bc-list-main">
+            <div class="bc-table-wrap">
+                <table class="bc-table" id="bc-table">
+                    <thead>
+                        <tr>
+                            <th class="col-nr">Nr.</th>
+                            <th>Name</th>
+                            <th>Rollen</th>
+                            <th>Betriebe</th>
+                            <th>Ort</th>
+                            <th>E-Mail</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Model.Personen)
+                        {
+                            var pName    = (p.Titel != null ? p.Titel + " " : "") + p.Vorname + " " + p.Nachname;
+                            var pBetrieb = p.Betriebe.Any() ? string.Join(", ", p.Betriebe) : "–";
+                            var pRollen  = string.Join("|", p.Rollen.Select(r => RolleText(r) + ":" + RolleClass(r)));
+                            <tr class="bc-row-link @(p.Gesperrt ? "bc-row-gesperrt" : "")"
+                                data-id="@p.PersonId"
+                                data-url="/Personen/Karte/@p.PersonId"
+                                data-nr="@p.PersonNr"
+                                data-name="@pName"
+                                data-betrieb="@pBetrieb"
+                                data-ort="@(p.Ort ?? "–")"
+                                data-email="@(p.Email ?? "–")"
+                                data-rollen="@pRollen">
+                                <td class="col-nr"><a href="/Personen/Karte/@p.PersonId" onclick="openModalWithNav(this.href);return false">@p.PersonNr</a></td>
+                                <td>
+                                    @pName
+                                    @if (p.Gesperrt) { <span class="bc-badge bc-badge-gesperrt" style="margin-left:4px">Gesperrt</span> }
+                                </td>
+                                <td>
+                                    @foreach (var r in p.Rollen)
+                                    { <span class="bc-badge @RolleClass(r)">@RolleText(r)</span> }
+                                </td>
+                                <td>@pBetrieb</td>
+                                <td>@(p.Ort ?? "–")</td>
+                                <td>@(p.Email ?? "–")</td>
+                            </tr>
+                        }
+                        @if (!Model.Personen.Any())
+                        {
+                            <tr><td colspan="6" style="text-align:center;color:#a19f9d;padding:12px">Keine Personen gefunden</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="bc-factbox" id="bc-factbox">
+            <div class="bc-factbox-header">Details</div>
+            <div class="bc-factbox-body" id="bc-factbox-body">
+                <p class="bc-factbox-empty">Zeile auswählen…</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    var table   = document.getElementById('bc-table');
+    var fbBody  = document.getElementById('bc-factbox-body');
+    var search  = document.getElementById('bc-search');
+    var countEl = document.getElementById('entry-count');
+    var allRows = table ? Array.from(table.querySelectorAll('tbody tr[data-id]')) : [];
+    var sel     = null;
+
+    function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function frow(l, v) {
+        return '<div class="bc-factbox-row"><span class="bc-factbox-label">' + l + '</span>'
+             + '<span class="bc-factbox-value">' + esc(v) + '</span></div>';
+    }
+
+    function buildFactbox(d) {
+        var rollenHtml = (d.rollen || '').split('|').filter(Boolean).map(function (r) {
+            var i = r.lastIndexOf(':');
+            return '<span class="bc-badge ' + r.substring(i + 1) + '" style="font-size:10px">' + esc(r.substring(0, i)) + '</span>';
+        }).join(' ');
+        return '<div class="bc-factbox-title">' + esc(d.name) + '</div>'
+             + '<div class="bc-factbox-nr">' + esc(d.nr) + '</div>'
+             + (rollenHtml ? '<div class="bc-factbox-badges">' + rollenHtml + '</div>' : '')
+             + frow('Betrieb', d.betrieb) + frow('Ort', d.ort) + frow('E-Mail', d.email)
+             + '<button class="bc-factbox-open" onclick="openModalWithNav(\'' + esc(d.url) + '\')">Karte öffnen ↗</button>';
+    }
+
+    function openModalWithNav(url) {
+        var vis = allRows.filter(function(r) { return !r.hidden; });
+        var idx = vis.findIndex(function(r) { return r.dataset.url === url; });
+        openModal(url, vis.map(function(r) { return r.dataset.url; }), idx);
+    }
+
+    allRows.forEach(function (tr) {
+        tr.addEventListener('click', function () {
+            if (sel) sel.classList.remove('bc-row-selected');
+            tr.classList.add('bc-row-selected');
+            sel = tr;
+            if (fbBody) fbBody.innerHTML = buildFactbox(tr.dataset);
+        });
+        tr.addEventListener('dblclick', function () { openModalWithNav(tr.dataset.url); });
+    });
+
+    if (search) {
+        search.addEventListener('input', function () {
+            var q = this.value.toLowerCase();
+            allRows.forEach(function (tr) { tr.hidden = q.length > 0 && !tr.textContent.toLowerCase().includes(q); });
+            updateCount();
+        });
+    }
+
+    function updateCount() {
+        var vis = allRows.filter(function (r) { return !r.hidden; }).length;
+        if (countEl) countEl.textContent = vis + ' Personen';
+    }
+    updateCount();
+})();
+</script>
+}

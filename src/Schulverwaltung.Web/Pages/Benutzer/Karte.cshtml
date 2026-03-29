@@ -1,0 +1,263 @@
+@page
+@model Schulverwaltung.Web.Pages.Benutzer.BenutzerKarteModel
+@using Schulverwaltung.Infrastructure.Services
+@{ ViewData["Title"] = Model.Titel; }
+
+<div class="bc-page">
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Benutzer" class="bc-back-btn">&#8592;</a>
+            <span class="bc-page-badge">BENUTZER</span>
+        </div>
+        <div style="display:flex;gap:6px">
+            @if (Model.Benutzer != null)
+            {
+                <button type="submit" form="form-speichern" class="bc-btn bc-btn-primary">Speichern</button>
+            }
+            <a href="/Benutzer" class="bc-btn">Abbrechen</a>
+        </div>
+    </div>
+
+    @if (Model.Benutzer == null)
+    {
+        <div class="bc-alert">Benutzer nicht gefunden.</div>
+        return;
+    }
+
+    <h1 class="bc-card-title">
+        <span>@Model.Benutzer.AdBenutzername</span>
+        @if (Model.Benutzer.DisplayName != null)
+        {
+            <span class="bc-title-sep">·</span>
+            <span>@Model.Benutzer.DisplayName</span>
+        }
+    </h1>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+
+    @* Action Tabs *@
+    <nav class="bc-action-tabs">
+        <a href="#" class="bc-action-tab active" data-panel="panel-allgemein">Allgemein</a>
+        <a href="#" class="bc-action-tab" data-panel="panel-protokoll">Anmelde-Historie (@Model.Protokoll.Count)</a>
+    </nav>
+
+    <div style="display:flex;gap:16px;align-items:flex-start">
+        <div style="flex:3;min-width:0">
+
+            @* Panel: Allgemein *@
+            <div id="panel-allgemein" class="bc-tab-panel active">
+                <form id="form-speichern" method="post" asp-page-handler="Speichern">
+                    <input type="hidden" name="id" value="@Model.Benutzer.BenutzerId" />
+
+                    <p class="bc-section-title">Konto-Informationen (aus Active Directory)</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field">
+                            <span class="bc-field-label">AD-Benutzername</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input class="bc-field-ctrl" value="@Model.Benutzer.AdBenutzername" readonly />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Anzeigename</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input class="bc-field-ctrl" value="@(Model.Benutzer.DisplayName ?? "–")" readonly />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">E-Mail</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input class="bc-field-ctrl" value="@(Model.Benutzer.Email ?? "–")" readonly />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Erster Login</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input class="bc-field-ctrl" value="@(Model.Benutzer.ErsterLogin?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "–")" readonly />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Letzter Login</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <input class="bc-field-ctrl" value="@(Model.Benutzer.LetzterLogin?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "–")" readonly />
+                            </div>
+                        </div>
+                    </div>
+
+                    <p class="bc-section-title" style="margin-top:16px">Berechtigungen</p>
+                    <div class="bc-fields-2col">
+                        <div class="bc-field">
+                            <span class="bc-field-label">Rolle</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <select name="appRolle" class="bc-field-ctrl">
+                                    @if (Model.Benutzer.AppRolle == 0) { <option value="0" selected>Gast</option> }           else { <option value="0">Gast</option> }
+                                    @if (Model.Benutzer.AppRolle == 1) { <option value="1" selected>Sachbearbeiter</option> } else { <option value="1">Sachbearbeiter</option> }
+                                    @if (Model.Benutzer.AppRolle == 2) { <option value="2" selected>Dozent</option> }         else { <option value="2">Dozent</option> }
+                                    @if (Model.Benutzer.AppRolle == 3) { <option value="3" selected>Administrator</option> }  else { <option value="3">Administrator</option> }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Person verknüpfen</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <select name="personId" class="bc-field-ctrl">
+                                    <option value="0">– keine –</option>
+                                    @foreach (var p in Model.PersonenListe)
+                                    {
+                                        @if (Model.Benutzer.PersonId == p.PersonId)
+                                        {
+                                            <option value="@p.PersonId" selected>@p.Name</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@p.PersonId">@p.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Gesperrt</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-sm">
+                                <input name="gesperrt" type="checkbox" value="true" class="bc-field-ctrl"
+                                       @(Model.Benutzer.Gesperrt ? "checked" : "") />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Sperrgrund</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input name="sperrGrund" class="bc-field-ctrl" maxlength="200"
+                                       value="@(Model.Benutzer.SperrGrund ?? "")" />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Inventar verwalten</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-sm">
+                                <input name="darfInventarVerwalten" type="checkbox" value="true" class="bc-field-ctrl"
+                                       @(Model.Benutzer.DarfInventarVerwalten ? "checked" : "") />
+                            </div>
+                        </div>
+                        <div class="bc-field-block bc-field-full">
+                            <label class="bc-field-label">Notiz</label>
+                            <textarea name="notiz" class="bc-field-ctrl" rows="3"
+                                      style="width:100%;resize:vertical">@(Model.Benutzer.Notiz ?? "")</textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            @* Panel: Anmelde-Historie *@
+            <div id="panel-protokoll" class="bc-tab-panel">
+                <table class="bc-table" style="width:100%;font-size:12px">
+                    <thead>
+                        <tr>
+                            <th style="width:140px">Datum</th>
+                            <th style="width:160px">Ereignis</th>
+                            <th>Alt</th>
+                            <th>Neu</th>
+                            <th style="width:120px">Durch</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Model.Protokoll)
+                        {
+                            <tr>
+                                <td><small>@p.Zeitstempel.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small></td>
+                                <td>
+                                    <span style="padding:1px 6px;border-radius:2px;font-size:11px;background:#f3f2f1;color:#323130">
+                                        @p.Ereignis
+                                    </span>
+                                </td>
+                                <td style="color:#a19f9d">@(p.AlterWert ?? "–")</td>
+                                <td>@(p.NeuerWert ?? "–")</td>
+                                <td><small style="color:#605e5c">@p.AusfuehrendUser</small></td>
+                            </tr>
+                        }
+                        @if (!Model.Protokoll.Any())
+                        {
+                            <tr><td colspan="5" style="text-align:center;color:#a19f9d;padding:16px">
+                                Keine Protokolleinträge vorhanden.
+                            </td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+        @* Rechte Seite – Infokacheln *@
+        <div style="flex:1;min-width:220px">
+            <div class="bc-side-container">
+                <div style="padding:12px">
+                    <p class="bc-section-title">Status</p>
+                    <div style="margin-bottom:8px">
+                        <span style="font-size:11px;color:#605e5c">Rolle</span><br />
+                        <strong>@AppBenutzerService.RolleText(Model.Benutzer.AppRolle)</strong>
+                    </div>
+                    <div style="margin-bottom:8px">
+                        <span style="font-size:11px;color:#605e5c">Zugang</span><br />
+                        @if (Model.Benutzer.Gesperrt)
+                        {
+                            <span style="color:#c50f1f;font-weight:600">&#9888; Gesperrt</span>
+                        }
+                        else if (Model.Benutzer.AppRolle == 0)
+                        {
+                            <span style="color:#8a6914">&#9888; Gast (nur Lesezugriff)</span>
+                        }
+                        else
+                        {
+                            <span style="color:#107C10">&#9679; Aktiv</span>
+                        }
+                    </div>
+                    @if (Model.Benutzer.DarfInventarVerwalten)
+                    {
+                        <div style="margin-bottom:8px">
+                            <span style="font-size:11px;color:#605e5c">Inventar</span><br />
+                            <span style="color:#107C10">&#9679; Darf verwalten</span>
+                        </div>
+                    }
+                    @if (Model.Benutzer.PersonId.HasValue && Model.Benutzer.Person != null)
+                    {
+                        <div style="margin-top:12px">
+                            <span style="font-size:11px;color:#605e5c">Verknüpfte Person</span><br />
+                            <a href="/Personen/Karte/@Model.Benutzer.PersonId" style="color:#00B7C3">
+                                @(Model.Benutzer.Person.Nachname + ", " + Model.Benutzer.Person.Vorname)
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function() {
+    var tabs   = document.querySelectorAll('.bc-action-tab');
+    var panels = document.querySelectorAll('.bc-tab-panel');
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            tabs.forEach(function(t)   { t.classList.remove('active'); });
+            panels.forEach(function(p) { p.classList.remove('active'); });
+            tab.classList.add('active');
+            var panel = document.getElementById(tab.dataset.panel);
+            if (panel) panel.classList.add('active');
+        });
+    });
+})();
+</script>
+}

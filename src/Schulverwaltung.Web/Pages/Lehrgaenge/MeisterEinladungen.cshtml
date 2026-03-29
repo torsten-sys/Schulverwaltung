@@ -1,0 +1,72 @@
+@page
+@model Schulverwaltung.Web.Pages.Lehrgaenge.MeisterEinladungenModel
+@{ ViewData["Title"] = "Einladungen"; }
+
+<div class="bc-page">
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Lehrgaenge/Karte/@Model.LehrgangId" class="bc-back-btn">&#x2190;</a>
+            <span class="bc-page-badge">Einladungen | @Model.LehrgangNr</span>
+        </div>
+        <div class="bc-card-topbar-right">
+            <a href="/Lehrgaenge/MeisterEinladungDruck?id=@Model.LehrgangId"
+               class="bc-btn bc-btn-sm" target="_blank" title="Alle Einladungen drucken">
+                &#x1F5A8; Seriendruck
+            </a>
+        </div>
+    </div>
+
+    <h1 class="bc-card-title">
+        <span class="bc-title-nr">@Model.LehrgangNr</span>
+        <span class="bc-title-sep"> · </span>
+        <span>Einladungen</span>
+    </h1>
+
+    <table class="bc-table" style="width:100%">
+        <thead>
+            <tr>
+                <th>Teilnehmer</th>
+                <th>Betrieb</th>
+                <th style="width:120px">Status</th>
+                <th style="width:130px">Erstellt am</th>
+                <th style="width:80px"></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var tn in Model.Teilnehmer)
+            {
+                <tr>
+                    <td style="font-weight:500">@tn.Name</td>
+                    <td style="color:#605e5c;font-size:12px">@tn.Betrieb</td>
+                    <td>
+                        @if (tn.Status == 255)
+                        {
+                            <span class="bc-badge" style="background:#f3f2f1;color:#a19f9d">Nicht erstellt</span>
+                        }
+                        else if (tn.Status == 0)
+                        {
+                            <span class="bc-badge" style="background:#fff4ce;color:#8a6914">Entwurf</span>
+                        }
+                        else
+                        {
+                            <span class="bc-badge" style="background:#dff6dd;color:#107C10">Fertig</span>
+                        }
+                    </td>
+                    <td style="font-size:12px;color:#605e5c">
+                        @(tn.ErstelltAm?.ToLocalTime().ToString("dd.MM.yyyy") ?? "–")
+                    </td>
+                    <td>
+                        <a href="/Lehrgaenge/MeisterEinladung?lehrgangId=@Model.LehrgangId&personId=@tn.PersonId"
+                           class="bc-btn bc-btn-sm">Öffnen</a>
+                    </td>
+                </tr>
+            }
+            @if (!Model.Teilnehmer.Any())
+            {
+                <tr><td colspan="5" style="text-align:center;color:#a19f9d;padding:16px">
+                    Keine Teilnehmer zugeordnet.
+                </td></tr>
+            }
+        </tbody>
+    </table>
+</div>

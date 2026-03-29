@@ -1,0 +1,149 @@
+@page
+@model Schulverwaltung.Web.Pages.Organisationen.IndexModel
+@{ ViewData["Title"] = "Organisationen"; }
+
+<div class="bc-page">
+    <h1 class="bc-page-title">Organisationen</h1>
+
+    <div class="bc-action-bar">
+        @if (Model.DarfBearbeiten)
+        {
+            <a class="bc-btn bc-btn-primary" href="/Organisationen/Karte?typ=0">+ Neue Innung</a>
+            <a class="bc-btn bc-btn-primary" href="/Organisationen/Karte?typ=1">+ Neue Handwerkskammer</a>
+            <span class="bc-sep"></span>
+        }
+        <form method="get" style="display:contents">
+            @{ var selTyp = Model.Typ ?? ""; }
+            <select name="Typ" class="bc-field-ctrl" style="width:auto;height:28px" onchange="this.form.submit()">
+                @if (selTyp == "") { <option value="" selected>Alle Typen</option> } else { <option value="">Alle Typen</option> }
+                @if (selTyp == "0") { <option value="0" selected>Innungen</option> } else { <option value="0">Innungen</option> }
+                @if (selTyp == "1") { <option value="1" selected>Handwerkskammern</option> } else { <option value="1">Handwerkskammern</option> }
+            </select>
+        </form>
+        <input type="search" id="bc-search" class="bc-search" placeholder="Suchen..." value="@Model.Suche" autocomplete="off" />
+        <span class="bc-entry-count" id="entry-count"></span>
+    </div>
+
+    <div class="bc-list-layout">
+        <div class="bc-list-main">
+            <div class="bc-table-wrap">
+                <table class="bc-table" id="bc-table">
+                    <thead>
+                        <tr>
+                            <th class="col-nr">Nr.</th>
+                            <th style="width:80px">Typ</th>
+                            <th>Name</th>
+                            <th>Kurzbezeichnung</th>
+                            <th>Ort</th>
+                            <th>E-Mail</th>
+                            <th class="col-num">Betriebe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var o in Model.Organisationen)
+                        {
+                            var typText = o.Typ == 0 ? "Innung" : "HWK";
+                            var typColor = o.Typ == 0 ? "#00B7C3" : "#8764B8";
+                            <tr class="bc-row-link @(o.Gesperrt ? "bc-row-gesperrt" : "")"
+                                data-id="@o.OrganisationId"
+                                data-url="/Organisationen/Karte/@o.OrganisationId"
+                                data-nr="@o.OrganisationsNr"
+                                data-name="@o.Name"
+                                data-typ="@typText"
+                                data-typ-color="@typColor"
+                                data-kurz="@(o.Kurzbezeichnung ?? "–")"
+                                data-ort="@(o.Ort ?? "–")"
+                                data-email="@(o.Email ?? "–")"
+                                data-betriebe="@o.AnzahlBetriebe"
+                                data-sammelrechnung="@(o.Sammelrechnung ? "Ja" : "–")">
+                                <td class="col-nr"><a href="/Organisationen/Karte/@o.OrganisationId" onclick="openModalWithNav(this.href);return false">@o.OrganisationsNr</a></td>
+                                <td>
+                                    <span style="background:@typColor;color:#fff;padding:1px 7px;font-size:11px;border-radius:2px">@typText</span>
+                                </td>
+                                <td>@o.Name</td>
+                                <td>@(o.Kurzbezeichnung ?? "–")</td>
+                                <td>@(o.Ort ?? "–")</td>
+                                <td>@(o.Email ?? "–")</td>
+                                <td class="col-num">@o.AnzahlBetriebe</td>
+                            </tr>
+                        }
+                        @if (!Model.Organisationen.Any())
+                        {
+                            <tr><td colspan="7" style="text-align:center;color:#a19f9d;padding:16px">Noch keine Organisationen vorhanden</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="bc-factbox" id="bc-factbox">
+            <div class="bc-factbox-header">Details</div>
+            <div class="bc-factbox-body" id="bc-factbox-body">
+                <p class="bc-factbox-empty">Zeile auswählen…</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    var table   = document.getElementById('bc-table');
+    var fbBody  = document.getElementById('bc-factbox-body');
+    var search  = document.getElementById('bc-search');
+    var countEl = document.getElementById('entry-count');
+    var allRows = table ? Array.from(table.querySelectorAll('tbody tr[data-id]')) : [];
+    var sel     = null;
+
+    function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function frow(l, v) {
+        return '<div class="bc-factbox-row"><span class="bc-factbox-label">' + l + '</span>'
+             + '<span class="bc-factbox-value">' + esc(v) + '</span></div>';
+    }
+
+    function buildFactbox(d) {
+        var typBadge = '<span style="background:' + esc(d.typColor) + ';color:#fff;padding:1px 6px;font-size:10px;border-radius:2px">' + esc(d.typ) + '</span>';
+        return '<div class="bc-factbox-title">' + esc(d.name) + '</div>'
+             + '<div class="bc-factbox-nr">' + esc(d.nr) + '</div>'
+             + '<div class="bc-factbox-badges">' + typBadge + '</div>'
+             + frow('Kurzbezeichnung', d.kurz)
+             + frow('Ort', d.ort)
+             + frow('E-Mail', d.email)
+             + frow('Betriebe', d.betriebe)
+             + frow('Sammelrechnung', d.sammelrechnung)
+             + '<button class="bc-factbox-open" onclick="openModalWithNav(\'/Organisationen/Karte/' + esc(d.id) + '\')">Karte öffnen ↗</button>';
+    }
+
+    function openModalWithNav(url) {
+        var vis = allRows.filter(function(r) { return !r.hidden; });
+        var idx = vis.findIndex(function(r) { return r.dataset.url === url; });
+        openModal(url, vis.map(function(r) { return r.dataset.url; }), idx);
+    }
+
+    allRows.forEach(function (tr) {
+        tr.addEventListener('click', function () {
+            if (sel) sel.classList.remove('bc-row-selected');
+            tr.classList.add('bc-row-selected');
+            sel = tr;
+            if (fbBody) fbBody.innerHTML = buildFactbox(tr.dataset);
+        });
+        tr.addEventListener('dblclick', function () { openModalWithNav(tr.dataset.url); });
+    });
+
+    if (search) {
+        search.addEventListener('input', function () {
+            var q = this.value.toLowerCase();
+            allRows.forEach(function (tr) { tr.hidden = q.length > 0 && !tr.textContent.toLowerCase().includes(q); });
+            updateCount();
+        });
+    }
+
+    function updateCount() {
+        var vis = allRows.filter(function (r) { return !r.hidden; }).length;
+        if (countEl) countEl.textContent = vis === allRows.length
+            ? allRows.length + ' Einträge'
+            : vis + ' von ' + allRows.length + ' Einträgen';
+    }
+    updateCount();
+})();
+</script>
+}

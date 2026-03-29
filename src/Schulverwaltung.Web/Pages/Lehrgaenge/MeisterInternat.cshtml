@@ -1,0 +1,65 @@
+@page
+@model Schulverwaltung.Web.Pages.Lehrgaenge.MeisterInternatModel
+@{ ViewData["Title"] = "Internat"; }
+
+<div class="bc-page">
+    @* Topbar *@
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Lehrgaenge/Karte/@Model.LehrgangId" class="bc-back-btn">&#x2190;</a>
+            <span class="bc-page-badge">Internat | @Model.LehrgangNr</span>
+        </div>
+    </div>
+
+    <h1 class="bc-card-title">
+        <span class="bc-title-nr">@Model.LehrgangNr</span>
+        <span class="bc-title-sep"> · </span>
+        <span>Internat</span>
+    </h1>
+
+    <p class="bc-section-title">Internat-Belegungen</p>
+
+    @if (Model.Belegungen.Any())
+    {
+        <table class="bc-table" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Person</th>
+                    <th>Zimmer</th>
+                    <th class="col-date">Einzug</th>
+                    <th class="col-date">Auszug</th>
+                    <th style="width:80px">Typ</th>
+                    <th style="width:80px">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in Model.Belegungen)
+                {
+                    <tr>
+                        <td>@b.PersonName</td>
+                        <td>@b.ZimmerBezeichnung</td>
+                        <td class="col-date">@b.EinzugDatum.ToString("dd.MM.yyyy")</td>
+                        <td class="col-date">@(b.AuszugDatum?.ToString("dd.MM.yyyy") ?? "–")</td>
+                        <td>
+                            <span class="bc-badge" style="background:#cce4ff;color:#0078D4;font-size:11px">@b.ZimmerTyp</span>
+                        </td>
+                        <td>
+                            <span class="bc-badge" style="@b.StatusStyle;font-size:11px">@b.StatusText</span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <p style="color:#a19f9d;text-align:center;padding:16px">
+            Keine Internat-Belegungen für diesen Lehrgang vorhanden.
+        </p>
+    }
+
+    <div style="display:flex;gap:8px;margin-top:12px">
+        <a href="/Internat/Index" class="bc-btn">Belegungsplan öffnen ↗</a>
+        <a href="/Internat/Belegung?lehrgangId=@Model.LehrgangId" class="bc-btn bc-btn-primary">+ Neue Belegung</a>
+    </div>
+</div>

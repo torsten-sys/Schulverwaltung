@@ -1,0 +1,46 @@
+## Build output
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.swp
+
+## ASP.NET Core
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Staging.json
+**/wwwroot/uploads/
+
+## Secrets / local config
+# appsettings.json mit echten Credentials → lokal anpassen nach dem Clone
+secrets.json
+
+## NuGet
+*.nupkg
+packages/
+.nuget/
+
+## Logs
+logs/
+*.log
+stdout*.log
+
+## Rider / JetBrains
+.idea/
+
+## OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## Projektspezifisch
+.claude/
+prompt*.txt
+promt*.txt
+internat-zimmer-migration.txt
+Neues Textdokument.txt
+profile-4.png
+Navision/
+RunSql.ps1
+update.bat

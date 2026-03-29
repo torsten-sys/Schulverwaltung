@@ -1,0 +1,176 @@
+@page
+@model Schulverwaltung.Web.Pages.Lehrgaenge.KursmoduleModel
+@{ ViewData["Title"] = "Kursmodule"; }
+
+@functions {
+    static string TypBadge(byte t) => t switch {
+        0 => "background:#cce4ff;color:#0078D4",
+        1 => "background:#c7f0e9;color:#00604A",
+        2 => "background:#1F3864;color:#fff",
+        _ => "background:#f3f2f1;color:#605e5c"
+    };
+    static string TypText(byte t) => t switch {
+        0 => "Vorbereitung", 1 => "Patientenversorgung", 2 => "Meisterprüfung", _ => ""
+    };
+    static string StatBadge(byte s) => s switch {
+        0 => "background:#f3f2f1;color:#605e5c",
+        1 => "background:#dff6dd;color:#107C10",
+        2 => "background:#323130;color:#fff",
+        _ => ""
+    };
+    static string StatText(byte s) => s switch {
+        0 => "Geplant", 1 => "Aktiv", 2 => "Abgeschlossen", _ => ""
+    };
+    static string PvBuchungBadge(byte s) => s switch {
+        0 => "background:#f3f2f1;color:#605e5c",
+        1 => "background:#cce4ff;color:#0078D4",
+        2 => "background:#dff6dd;color:#107C10",
+        _ => ""
+    };
+    static string PvBuchungText(byte s) => s switch {
+        0 => "Planung", 1 => "Bestätigt", 2 => "Gebucht", _ => ""
+    };
+}
+
+<div class="bc-page">
+    @* Topbar *@
+    <div class="bc-card-topbar">
+        <div class="bc-card-topbar-left">
+            <a href="/Lehrgaenge/Karte/@Model.LehrgangId" class="bc-back-btn">&#x2190;</a>
+            <span class="bc-page-badge">Kursmodule | @Model.LehrgangNr</span>
+        </div>
+        <div class="bc-card-topbar-right">
+            <button type="submit" form="form-abschnitte" class="bc-icon-btn" title="Speichern">&#x2714;</button>
+        </div>
+    </div>
+
+    <h1 class="bc-card-title">
+        <span class="bc-title-nr">@Model.LehrgangNr</span>
+        <span class="bc-title-sep"> · </span>
+        <span>Kursmodule</span>
+    </h1>
+
+    @if (!string.IsNullOrEmpty(Model.Fehler))
+    {
+        <div class="bc-alert">@Model.Fehler</div>
+    }
+
+    <form id="form-abschnitte" method="post" asp-page-handler="Speichern">
+        <input type="hidden" name="lehrgangId" value="@Model.LehrgangId" />
+
+        @foreach (var abschnitt in Model.Abschnitte)
+        {
+            var accordionId = "acc-" + abschnitt.AbschnittId;
+            <div style="border:1px solid #d1cfcd;margin-bottom:8px;background:#fff">
+                @* Accordion-Header *@
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none"
+                     onclick="toggleAccordion('@accordionId')">
+                    <span style="font-weight:600;color:#1F3864;min-width:24px">@abschnitt.Nummer.</span>
+                    <span style="flex:1;font-weight:500">@abschnitt.Bezeichnung</span>
+                    <span style="@TypBadge(abschnitt.AbschnittTyp);padding:1px 8px;font-size:11px">@TypText(abschnitt.AbschnittTyp)</span>
+                    <span style="@StatBadge(abschnitt.Status);padding:1px 8px;font-size:11px">@StatText(abschnitt.Status)</span>
+                    <span id="@accordionId-icon" style="color:#00B7C3;font-size:14px;transform:rotate(90deg);transition:transform 0.2s">&#9654;</span>
+                </div>
+
+                @* Accordion-Body *@
+                <div id="@accordionId" style="display:none;padding:12px 14px 14px;border-top:1px solid #edebe9">
+                    @* Abschnitt bearbeiten *@
+                    <div class="bc-fields-2col" style="margin-bottom:10px">
+                        <div class="bc-field">
+                            <span class="bc-field-label req">Bezeichnung</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-lg">
+                                <input name="Bezeichnungen[@abschnitt.AbschnittId]"
+                                       value="@abschnitt.Bezeichnung" class="bc-field-ctrl" required />
+                            </div>
+                        </div>
+                        <div class="bc-field">
+                            <span class="bc-field-label">Status</span>
+                            <span class="bc-field-dots"></span>
+                            <div class="bc-field-right bc-field-right-md">
+                                <select name="Status[@abschnitt.AbschnittId]" class="bc-field-ctrl">
+                                    @if (abschnitt.Status == 0) { <option value="0" selected>Geplant</option> } else { <option value="0">Geplant</option> }
+                                    @if (abschnitt.Status == 1) { <option value="1" selected>Aktiv</option> } else { <option value="1">Aktiv</option> }
+                                    @if (abschnitt.Status == 2) { <option value="2" selected>Abgeschlossen</option> } else { <option value="2">Abgeschlossen</option> }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* PV-Abschnitte: Patientenzuordnungen anzeigen *@
+                    @if (abschnitt.AbschnittTyp >= 1)
+                    {
+                        var pvEintraege = Model.Patientenzuordnungen
+                            .Where(z => z.AbschnittId == abschnitt.AbschnittId)
+                            .ToList();
+                        <div style="margin-top:10px">
+                            <p class="bc-section-title" style="font-size:11px">PATIENTENZUORDNUNGEN</p>
+                            @if (pvEintraege.Any())
+                            {
+                                <table class="bc-table" style="width:100%;font-size:12px">
+                                    <thead>
+                                        <tr>
+                                            <th>Patient</th>
+                                            <th>Meisterschüler</th>
+                                            <th style="width:100px">Buchung</th>
+                                            <th style="width:100px">Termin</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var pv in pvEintraege)
+                                        {
+                                            <tr>
+                                                <td>@pv.PatientName</td>
+                                                <td>@(pv.MeisterschuelerName ?? "–")</td>
+                                                <td>
+                                                    <span style="@PvBuchungBadge(pv.BuchungsStatus);padding:1px 6px;font-size:11px">
+                                                        @PvBuchungText(pv.BuchungsStatus)
+                                                    </span>
+                                                </td>
+                                                <td style="color:#605e5c">@(pv.TerminDatum?.ToString("dd.MM.yyyy") ?? "–")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            else
+                            {
+                                <p style="color:#a19f9d;font-size:12px;margin:4px 0">
+                                    Keine Patientenzuordnungen vorhanden.
+                                    <a href="/Lehrgaenge/MeisterPatientenversorgung?lehrgangId=@Model.LehrgangId&abschnittId=@abschnitt.AbschnittId"
+                                       style="color:#00B7C3">Zuordnungen verwalten ↗</a>
+                                </p>
+                            }
+                            <div style="margin-top:8px">
+                                <a href="/Lehrgaenge/MeisterPatientenversorgung?lehrgangId=@Model.LehrgangId&abschnittId=@abschnitt.AbschnittId"
+                                   class="bc-btn bc-btn-sm">Patienten verwalten ↗</a>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (!Model.Abschnitte.Any())
+        {
+            <p style="color:#a19f9d;text-align:center;padding:20px">Keine Kursmodule vorhanden.</p>
+        }
+    </form>
+</div>
+
+@section Scripts {
+<script>
+function toggleAccordion(id) {
+    var body = document.getElementById(id);
+    var icon = document.getElementById(id + '-icon');
+    if (!body) return;
+    if (body.style.display === 'none') {
+        body.style.display = 'block';
+        if (icon) icon.style.transform = 'rotate(270deg)';
+    } else {
+        body.style.display = 'none';
+        if (icon) icon.style.transform = 'rotate(90deg)';
+    }
+}
+</script>
+}
